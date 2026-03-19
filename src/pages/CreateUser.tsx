@@ -16,30 +16,14 @@ interface RoleItem {
 }
 
 const availableRoles: RoleItem[] = [
-  { id: "r1", name: "标注项目经理", description: "标注项目经理" },
-  { id: "r2", name: "评测协管", description: "" },
-  { id: "r3", name: "888", description: "" },
-  { id: "r4", name: "评测员", description: "" },
-  { id: "r5", name: "质检人员", description: "数据采集app对应人员" },
-  { id: "r6", name: "数据集生产管理员", description: "" },
-  { id: "r7", name: "测评验收员", description: "测评验收员" },
-  { id: "r8", name: "20260313", description: "" },
-  { id: "r9", name: "123", description: "" },
-  { id: "r10", name: "1234", description: "123" },
+  { id: "r1", name: "UAP管理员", description: "具备平台完整的菜单权限" },
+  { id: "r2", name: "运营管理员", description: "具备平台完整的菜单权限" },
+  { id: "r3", name: "租户管理员", description: "具备平台完整的菜单权限" },
+  { id: "r4", name: "端侧任务管理员", description: "按权限表配置（拥有任务及录音相关权限，无服务端/移动端用户管理权限）" },
+  { id: "r5", name: "端侧质检员", description: "按权限表配置（主要具备任务回收查看、音频详情确认打包等权限）" },
 ];
 
-const assignedRolesInit: RoleItem[] = [
-  { id: "a1", name: "标注员(系统)", description: "负责数据标注业务，归属标注项目管理员管辖" },
-  { id: "a2", name: "租户管理员", description: "租户管理员" },
-  { id: "a3", name: "标注协管", description: "主要负责分配标注任务的" },
-  { id: "a4", name: "验收员(系统)", description: "验收员" },
-  { id: "a5", name: "质检员(系统)", description: "负责标注后数据的审核审查，并对符合要求的数据提取" },
-  { id: "a6", name: "运维管理员", description: "负责开发测试、系统运维，具备技术支持与操作权限。" },
-  { id: "a7", name: "项目经理(系统)", description: "负责AI项目的管理，包括人员添加、任务查看、提供..." },
-  { id: "a8", name: "初始角色(系统)", description: "作为AI应用初始化角色，可访问能力超市、问答助手..." },
-  { id: "a9", name: "供应商", description: "供应商" },
-  { id: "a10", name: "普通用户", description: "普通用户只拥有数据集管理和数据处理的功能" },
-];
+const assignedRolesInit: RoleItem[] = [];
 
 const CreateUser = () => {
   const navigate = useNavigate();
@@ -67,6 +51,12 @@ const CreateUser = () => {
     if (!loginName.trim()) { toast.error("请输入登录名称"); return; }
     if (!realName.trim()) { toast.error("请输入用户姓名"); return; }
     if (!tenant) { toast.error("请选择所属租户"); return; }
+
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error("请输入正确的邮箱格式");
+      return;
+    }
+
     setStep(2);
   };
 

@@ -12,6 +12,7 @@ interface Props {
 }
 
 const ChangePasswordDialog = ({ open, onOpenChange }: Props) => {
+  const [account, setAccount] = useState("");
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -27,13 +28,14 @@ const ChangePasswordDialog = ({ open, onOpenChange }: Props) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!account.trim()) { toast.error("请输入用户账号"); return; }
     if (!oldPassword.trim()) { toast.error("请输入原密码"); return; }
     const err = validatePassword(newPassword);
     if (err) { toast.error(err); return; }
     if (newPassword !== confirmPassword) { toast.error("两次密码不一致"); return; }
     toast.success("密码修改成功");
     onOpenChange(false);
-    setOldPassword(""); setNewPassword(""); setConfirmPassword("");
+    setAccount(""); setOldPassword(""); setNewPassword(""); setConfirmPassword("");
   };
 
   return (
@@ -43,6 +45,10 @@ const ChangePasswordDialog = ({ open, onOpenChange }: Props) => {
           <DialogTitle>修改密码</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label>用户账号</Label>
+            <Input value={account} onChange={(e) => setAccount(e.target.value)} placeholder="请输入用户账号" />
+          </div>
           <div className="space-y-2">
             <Label>原密码</Label>
             <Input type="password" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} placeholder="请输入原密码" />

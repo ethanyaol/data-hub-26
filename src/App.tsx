@@ -8,6 +8,9 @@ import DashboardLayout from "./components/DashboardLayout";
 import DashboardHome from "./pages/DashboardHome";
 import UserManagement from "./pages/UserManagement";
 import CreateUser from "./pages/CreateUser";
+import EditUser from "./pages/EditUser";
+import UserDetail from "./pages/UserDetail";
+import ComingSoon from "./pages/ComingSoon";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +27,10 @@ const App = () => (
             <Route index element={<DashboardHome />} />
             <Route path="user-management" element={<UserManagement />} />
             <Route path="user-management/create" element={<CreateUser />} />
+            <Route path="user-management/edit/:id" element={<EditUser />} />
+            <Route path="user-management/detail/:id" element={<UserDetail />} />
+            <Route path="tasks" element={<ComingSoon />} />
+            <Route path="mobile-users" element={<ComingSoon />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

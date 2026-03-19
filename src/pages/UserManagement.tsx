@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { ResetPasswordConfirmDialog } from "@/components/ResetPasswordConfirmDialog";
 
 interface UserRecord {
   id: number;
@@ -37,6 +38,9 @@ const UserManagement = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const totalPages = 39;
   const totalUsers = 390;
+
+  const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
 
   const filteredUsers = mockUsers.filter((u) => {
     if (searchName && !u.loginName.includes(searchName) && !u.realName.includes(searchName)) return false;
@@ -107,7 +111,7 @@ const UserManagement = () => {
           <Input
             value={searchName}
             onChange={(e) => setSearchName(e.target.value)}
-            placeholder="用户名称、从账号"
+            placeholder="登录名称、用户姓名"
             className="w-48 h-9 pr-8"
           />
           <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -156,9 +160,9 @@ const UserManagement = () => {
                 </td>
                 <td>
                   <div className="flex items-center gap-2">
-                    <button className="text-xs text-primary hover:text-primary/80">编辑</button>
-                    <button className="text-xs text-primary hover:text-primary/80">详情</button>
-                    <button className="text-xs text-primary hover:text-primary/80">重置密码</button>
+                    <button onClick={() => navigate(`/dashboard/user-management/edit/${user.id}`)} className="text-xs text-primary hover:text-primary/80">编辑</button>
+                    <button onClick={() => navigate(`/dashboard/user-management/detail/${user.id}`)} className="text-xs text-primary hover:text-primary/80">详情</button>
+                    <button onClick={() => { setSelectedUser(user); setResetModalOpen(true); }} className="text-xs text-primary hover:text-primary/80">重置密码</button>
                   </div>
                 </td>
               </tr>
@@ -183,11 +187,10 @@ const UserManagement = () => {
             <button
               key={p}
               onClick={() => setCurrentPage(p)}
-              className={`px-2.5 py-1 border rounded text-xs ${
-                currentPage === p
-                  ? "border-primary text-primary bg-primary/5"
-                  : "border-border hover:bg-muted"
-              }`}
+              className={`px-2.5 py-1 border rounded text-xs ${currentPage === p
+                ? "border-primary text-primary bg-primary/5"
+                : "border-border hover:bg-muted"
+                }`}
             >
               {p}
             </button>
@@ -195,11 +198,10 @@ const UserManagement = () => {
           <span className="px-1">...</span>
           <button
             onClick={() => setCurrentPage(totalPages)}
-            className={`px-2.5 py-1 border rounded text-xs ${
-              currentPage === totalPages
-                ? "border-primary text-primary bg-primary/5"
-                : "border-border hover:bg-muted"
-            }`}
+            className={`px-2.5 py-1 border rounded text-xs ${currentPage === totalPages
+              ? "border-primary text-primary bg-primary/5"
+              : "border-border hover:bg-muted"
+              }`}
           >
             {totalPages}
           </button>
@@ -212,6 +214,12 @@ const UserManagement = () => {
           </button>
         </div>
       </div>
+
+      <ResetPasswordConfirmDialog
+        open={resetModalOpen}
+        onOpenChange={setResetModalOpen}
+        user={selectedUser}
+      />
     </div>
   );
 };

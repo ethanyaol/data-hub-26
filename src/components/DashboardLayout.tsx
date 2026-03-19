@@ -98,7 +98,7 @@ const DashboardLayout = () => {
           </div>
           <span className="font-semibold text-foreground">端侧数据采集平台</span>
           <span className="ml-4 px-3 py-1 bg-primary/10 text-primary text-xs rounded-full font-medium">
-            运营管理中心
+            数据汇聚中心
           </span>
         </div>
         <div className="flex items-center gap-4">

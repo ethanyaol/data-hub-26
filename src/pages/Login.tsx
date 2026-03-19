@@ -4,8 +4,7 @@ import { User, Lock, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import loginBg from "@/assets/login-bg.jpg";
-import ResetPasswordDialog from "@/components/ResetPasswordDialog";
+import loginBg from "@/assets/login-bg-v4.png";
 import ChangePasswordDialog from "@/components/ChangePasswordDialog";
 
 const Login = () => {
@@ -14,7 +13,6 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showReset, setShowReset] = useState(false);
   const [showChange, setShowChange] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -45,36 +43,36 @@ const Login = () => {
         className="absolute inset-0 bg-cover bg-center"
         style={{ backgroundImage: `url(${loginBg})` }}
       />
-      <div className="absolute inset-0 bg-gradient-to-br from-background/80 via-background/40 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-r from-black via-black/40 to-transparent lg:from-black lg:via-background/20" />
 
       {/* Header */}
       <div className="absolute top-0 left-0 right-0 px-8 py-5 flex items-center gap-3 z-10">
         <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
           <span className="text-primary-foreground font-bold text-sm">D</span>
         </div>
-        <span className="text-foreground font-semibold text-lg">端侧数据采集平台</span>
+        <span className="text-white font-semibold text-lg drop-shadow-sm">端侧数据采集平台</span>
       </div>
 
       {/* Content */}
       <div className="relative z-10 w-full max-w-6xl mx-auto px-8 flex items-center justify-between gap-16">
         {/* Left Info */}
         <div className="hidden lg:block flex-1 space-y-6">
-          <h1 className="text-3xl font-bold text-foreground">数据供给中心</h1>
-          <div className="space-y-3 text-muted-foreground">
+          <h1 className="text-3xl font-bold text-white tracking-wide">数据汇聚中心</h1>
+          <div className="space-y-3 text-slate-200">
             <div className="flex items-center gap-2">
-              <span className="text-primary">⚙️</span>
+              <span className="text-blue-400">⚙️</span>
               <span>面向大模型研发需求</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-primary">📊</span>
+              <span className="text-blue-400">📊</span>
               <span>汇聚多语言、多类型、多模态、多领域的高质量数据集</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-primary">🔄</span>
+              <span className="text-blue-400">🔄</span>
               <span>构建"采-用-优"闭环大模型数据体系</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-primary">🖥️</span>
+              <span className="text-blue-400">🖥️</span>
               <span>建设面对大模型训练的数据汇聚、处理、管理、运营、供给的平台能力</span>
             </div>
           </div>
@@ -86,12 +84,6 @@ const Login = () => {
             <h2 className="text-2xl font-semibold text-card-foreground tracking-wider">
               账 号 登 录
             </h2>
-            <button
-              onClick={() => toast.info("注册功能开发中")}
-              className="text-sm text-primary hover:text-primary/80 transition-colors"
-            >
-              注册
-            </button>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
@@ -131,14 +123,7 @@ const Login = () => {
               {loading ? "登录中..." : "登 录"}
             </Button>
 
-            <div className="flex items-center justify-between text-sm">
-              <button
-                type="button"
-                onClick={() => setShowReset(true)}
-                className="text-primary hover:text-primary/80 transition-colors"
-              >
-                忘记密码？
-              </button>
+            <div className="flex items-center justify-end text-sm">
               <button
                 type="button"
                 onClick={() => setShowChange(true)}
@@ -152,11 +137,10 @@ const Login = () => {
       </div>
 
       {/* Footer */}
-      <div className="absolute bottom-4 text-sm text-muted-foreground">
+      <div className="absolute bottom-4 text-sm text-slate-400">
         技术支持 - 端侧数据采集平台
       </div>
 
-      <ResetPasswordDialog open={showReset} onOpenChange={setShowReset} />
       <ChangePasswordDialog open={showChange} onOpenChange={setShowChange} />
     </div>
   );
