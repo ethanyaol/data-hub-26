@@ -26,13 +26,18 @@ const Login = () => {
       return;
     }
     setLoading(true);
-    // Mock login
+    // Mock login with validation
     setTimeout(() => {
       setLoading(false);
-      localStorage.setItem("auth_token", "mock_token");
-      localStorage.setItem("auth_user", username);
-      toast.success("登录成功");
-      navigate("/dashboard/user-management");
+      if (username === "liangyao3" && password === "DataHub123！") {
+        localStorage.setItem("auth_token", "mock_token");
+        localStorage.setItem("auth_user", "liangyao3");
+        localStorage.setItem("user_role", "UAP管理员");
+        toast.success("登录成功");
+        navigate("/dashboard/user-management");
+      } else {
+        toast.error("用户名或密码错误，请重试");
+      }
     }, 800);
   };
 

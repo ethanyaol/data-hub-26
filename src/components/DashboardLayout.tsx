@@ -7,7 +7,6 @@ import {
   Server,
   ChevronDown,
   ChevronRight,
-  Bell,
   FileText,
   LogOut,
   Layers,
@@ -102,8 +101,7 @@ const DashboardLayout = () => {
           </span>
         </div>
         <div className="flex items-center gap-4">
-          <Bell className="h-5 w-5 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
-          <span className="text-sm text-foreground">{currentUser}</span>
+          <span className="text-sm text-foreground font-medium">{currentUser}</span>
           <button
             onClick={handleLogout}
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-destructive transition-colors"
