@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Upload, Download, Trash2, Check, ChevronsUpDown, CalendarIcon } from "lucide-react";
+import { 
+  Plus, Upload, Download, Trash2, Check, ChevronsUpDown, CalendarIcon,
+  FileText, Settings2, ShieldCheck, LayoutList
+} from "lucide-react";
 import { format, parseISO, parse, isBefore, startOfDay } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { toast } from "sonner";
@@ -261,34 +264,54 @@ const CreateTask = () => {
         <span className="text-foreground font-medium">新建任务</span>
       </div>
 
-      {/* 步骤指示器 */}
-      <div className="bg-card border border-border rounded-lg p-6 shadow-sm">
-        <div className="flex items-center justify-between relative px-10">
-          {/* 线条背景 */}
-          <div className="absolute top-1/2 left-0 w-full h-0.5 bg-muted -translate-y-1/2 z-0" />
-          <div
-            className="absolute top-1/2 left-0 h-0.5 bg-primary -translate-y-1/2 z-0 transition-all duration-300"
-            style={{ width: `${((currentStep - 1) / (steps.length - 1)) * 100}%` }}
-          />
-
+      {/* 步骤指示器 - 极简大气设计 (水平排列式) */}
+      <div className="bg-transparent mb-12 py-4">
+        <div className="flex items-center justify-between max-w-5xl mx-auto px-10">
           {steps.map((step, index) => {
             const stepNumber = index + 1;
             const isActive = currentStep === stepNumber;
             const isCompleted = currentStep > stepNumber;
+            const isLast = index === steps.length - 1;
 
             return (
-              <div key={index} className="flex flex-col items-center relative z-10">
-                <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-300 shadow-md ${isActive ? "bg-primary text-white scale-110 ring-4 ring-primary/20" :
-                    isCompleted ? "bg-success text-white" :
-                      "bg-muted text-muted-foreground border border-border"
-                    }`}
-                >
-                  {isCompleted ? "✓" : stepNumber}
+              <div key={index} className={cn("flex flex-1 items-center group", isLast && "flex-initial")}>
+                <div className="flex items-center gap-4 relative">
+                  <div
+                    className={cn(
+                      "w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-500",
+                      isActive 
+                        ? "bg-primary text-white ring-8 ring-primary/10" 
+                        : isCompleted
+                          ? "bg-emerald-600 text-white"
+                          : "bg-slate-50 text-slate-400 border border-slate-200"
+                    )}
+                  >
+                    {isCompleted ? <Check className="w-5 h-5" /> : stepNumber}
+                  </div>
+                  <div className="flex flex-col">
+                    <span 
+                      className={cn(
+                        "text-[13px] font-bold tracking-wide transition-colors",
+                        isActive ? "text-primary" : isCompleted ? "text-emerald-600" : "text-slate-400"
+                      )}
+                    >
+                      {step.title}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground/40 font-medium uppercase tracking-tighter">
+                      Step {stepNumber}
+                    </span>
+                  </div>
                 </div>
-                <span className={`mt-3 text-xs font-medium whitespace-nowrap ${isActive ? "text-primary bg-primary/5 px-2 py-0.5 rounded" : "text-muted-foreground"}`}>
-                  {step.title}
-                </span>
+                {!isLast && (
+                  <div className="flex-1 mx-8 h-[1px] bg-slate-200 relative overflow-hidden">
+                    <div 
+                      className={cn(
+                        "absolute top-0 left-0 h-full bg-emerald-600 transition-all duration-1000 ease-in-out",
+                        isCompleted ? "w-full" : "w-0"
+                      )}
+                    />
+                  </div>
+                )}
               </div>
             );
           })}
