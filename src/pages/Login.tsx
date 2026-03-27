@@ -14,6 +14,7 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showChange, setShowChange] = useState(false);
+  const [isForced, setIsForced] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,6 +30,14 @@ const Login = () => {
     // Mock login with validation
     setTimeout(() => {
       setLoading(false);
+      // Mock login for mobile user with default password
+      if (password === "123456") {
+        toast.warning("检测到使用默认密码首次登录，请先修改密码");
+        setIsForced(true);
+        setShowChange(true);
+        return;
+      }
+
       if (username === "liangyao3" && password === "DataHub123！") {
         localStorage.setItem("auth_token", "mock_token");
         localStorage.setItem("auth_user", "liangyao3");
@@ -66,7 +75,7 @@ const Login = () => {
           <div className="space-y-3 text-slate-200">
             <div className="flex items-center gap-2">
               <span className="text-blue-400">⚙️</span>
-              <span>面向大模型研发需求</span>
+              <span>面向多模态数据采集与大模型研发需求</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-blue-400">📊</span>
@@ -74,11 +83,11 @@ const Login = () => {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-blue-400">🔄</span>
-              <span>构建"采-用-优"闭环大模型数据体系</span>
+              <span>智能自检、多轮次人工质检流程，人机协作严格把控质量</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-blue-400">🖥️</span>
-              <span>建设面对大模型训练的数据汇聚、处理、管理、运营、供给的平台能力</span>
+              <span>数据产权清晰、安全合规</span>
             </div>
           </div>
         </div>
@@ -146,7 +155,7 @@ const Login = () => {
         技术支持 - 端侧数据采集平台
       </div>
 
-      <ChangePasswordDialog open={showChange} onOpenChange={setShowChange} />
+      <ChangePasswordDialog open={showChange} onOpenChange={setShowChange} isForced={isForced} />
     </div>
   );
 };

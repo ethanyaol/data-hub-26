@@ -10,6 +10,7 @@ import {
   FileText,
   LogOut,
   Layers,
+  BarChart3,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -28,6 +29,7 @@ const menuItems: MenuItem[] = [
     label: "多模态采集",
     icon: <Layers className="h-4 w-4" />,
     children: [
+      { key: "overview", label: "数据统计", icon: <BarChart3 className="h-4 w-4" />, path: "/dashboard/overview" },
       { key: "task-mgmt", label: "任务管理", icon: <FileText className="h-4 w-4" />, path: "/dashboard/tasks" },
       { key: "mobile-users", label: "移动端用户管理", icon: <Monitor className="h-4 w-4" />, path: "/dashboard/mobile-users" },
       { key: "server-users", label: "服务端用户管理", icon: <Server className="h-4 w-4" />, path: "/dashboard/user-management" },
@@ -57,7 +59,11 @@ const DashboardLayout = () => {
   const renderMenuItem = (item: MenuItem, depth = 0) => {
     const hasChildren = item.children && item.children.length > 0;
     const isExpanded = expandedMenus.includes(item.key);
-    const isActive = item.path === location.pathname;
+    const isActive = item.path
+      ? item.path === "/dashboard"
+        ? location.pathname === "/dashboard" || location.pathname === "/dashboard/"
+        : location.pathname.startsWith(item.path)
+      : false;
 
     return (
       <div key={item.key}>

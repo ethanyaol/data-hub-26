@@ -18,7 +18,7 @@ interface RoleItem {
 const availableRoles: RoleItem[] = [
   { id: "r1", name: "UAP管理员", description: "具备平台完整的菜单权限" },
   { id: "r2", name: "运营管理员", description: "具备平台完整的菜单权限" },
-  { id: "r3", name: "租户管理员", description: "具备平台完整的菜单权限" },
+  { id: "r3", name: "运维管理员", description: "具备平台完整的菜单权限" },
   { id: "r4", name: "端侧任务管理员", description: "按权限表配置（拥有任务及录音相关权限，无服务端/移动端用户管理权限）" },
   { id: "r5", name: "端侧质检员", description: "按权限表配置（主要具备任务回收查看、音频详情确认打包等权限）" },
 ];

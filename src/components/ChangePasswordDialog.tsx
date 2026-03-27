@@ -9,9 +9,10 @@ import PasswordStrength from "@/components/PasswordStrength";
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  isForced?: boolean;
 }
 
-const ChangePasswordDialog = ({ open, onOpenChange }: Props) => {
+const ChangePasswordDialog = ({ open, onOpenChange, isForced }: Props) => {
   const [account, setAccount] = useState("");
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -38,11 +39,16 @@ const ChangePasswordDialog = ({ open, onOpenChange }: Props) => {
     setAccount(""); setOldPassword(""); setNewPassword(""); setConfirmPassword("");
   };
 
+  const handleOpenChange = (v: boolean) => {
+    if (isForced && !v) return;
+    onOpenChange(v);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>修改密码</DialogTitle>
+          <DialogTitle>{isForced ? "首次登录必须修改密码" : "修改密码"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
@@ -63,8 +69,14 @@ const ChangePasswordDialog = ({ open, onOpenChange }: Props) => {
             <Input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="请再次输入新密码" />
           </div>
           <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
-            <Button type="submit">确认修改</Button>
+            {!isForced && (
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                取消
+              </Button>
+            )}
+            <Button type="submit" className={isForced ? "w-full" : ""}>
+              确认修改
+            </Button>
           </div>
         </form>
       </DialogContent>
