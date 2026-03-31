@@ -10,6 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import Cascader from "@/components/ui/cascader";
+
+// 脱敏辅助函数
+const maskPhone = (phone: string) => {
+  if (!phone || phone === "-") return "-";
+  return phone.replace(/^(\d{3})\d{4}(\d{4})$/, "$1****$2");
+};
 
 interface EditRecorderInfoDialogProps {
   open: boolean;
@@ -45,7 +52,7 @@ const EditRecorderInfoDialog = ({
   useEffect(() => {
     if (open && recorder) {
       setRecorderName(recorder.recorderName);
-      setContact(recorder.contact);
+      setContact(maskPhone(recorder.contact));
       setGender(recorder.gender);
       setAge(recorder.age);
       setGrowthLocation(recorder.growthLocation);
@@ -120,10 +127,10 @@ const EditRecorderInfoDialog = ({
             </div>
             <div className="space-y-2">
               <Label>成长地点</Label>
-              <Input
+              <Cascader
                 value={growthLocation}
-                onChange={(e) => setGrowthLocation(e.target.value)}
-                placeholder="请输入成长地点"
+                onValueChange={setGrowthLocation}
+                placeholder="选择成长地 (省-市)"
               />
             </div>
           </div>

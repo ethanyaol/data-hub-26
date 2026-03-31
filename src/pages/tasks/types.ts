@@ -25,7 +25,7 @@ export const SPEEDS = ["超快语速", "快语速", "正常语速", "慢语速"]
 
 export const TASK_STATUSES = ["进行中", "已结束", "已归档"] as const;
 
-export const ACCEPTANCE_STATUSES = ["待验收", "已通过", "已打回", "已补录", "已废弃"] as const;
+export const ACCEPTANCE_STATUSES = ["待上传", "待验收", "已通过", "已打回", "已补录", "已废弃"] as const;
 
 export const CLAIM_STATUSES = ["已领取", "未领取"] as const;
 
@@ -69,7 +69,7 @@ export interface AgentRecoveryRecord {
   genderRatio: string;
   completedAcceptanceCount: string;
   completedAcceptanceTerms: string;
-  status: "进行中" | "已完成";
+  status: "已回收" | "未回收";
   createTime: string;
 }
 
@@ -82,7 +82,7 @@ export interface NonAgentRecoveryRecord {
   completedAcceptanceCount: string;
   completedAcceptanceTerms: string;
   createTime: string;
-  status: "进行中" | "已完成";
+  status: "已回收" | "未回收";
 }
 
 export interface SubtaskRecord {
@@ -132,9 +132,9 @@ export interface AudioDetailRecord {
   recognitionResult: string;
   textMatchConsistent: boolean;
   audioFormat: string;
-  acceptanceStatus: "待验收" | "已通过" | "已打回" | "已补录" | "已废弃";
+  acceptanceStatus: "待上传" | "待验收" | "已通过" | "已打回" | "已补录" | "已废弃";
   remark: string;
-  createTime: string;
+  updateTime: string;
 }
 
 export interface PersonnelAssignRecord {

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, RotateCcw, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { mockAgentRecovery } from "./mockData";
 import type { AgentRecoveryRecord } from "./types";
@@ -9,6 +9,16 @@ import PersonnelAssignDialog from "@/components/tasks/PersonnelAssignDialog";
 import ShareWarningDialog from "@/components/tasks/ShareWarningDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -27,10 +37,14 @@ const TaskRecoveryAgent = () => {
   const [allocationDialogOpen, setAllocationDialogOpen] = useState(false);
   const [personnelDialogOpen, setPersonnelDialogOpen] = useState(false);
   const [warningDialogOpen, setWarningDialogOpen] = useState(false);
+  const [endTaskConfirmOpen, setEndTaskConfirmOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<AgentRecoveryRecord | null>(null);
+  const [recordToEnd, setRecordToEnd] = useState<AgentRecoveryRecord | null>(null);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [goToPage, setGoToPage] = useState("");
 
   // Filtering logic
   const filteredRecords = mockAgentRecovery.filter((record) => {
@@ -43,10 +57,10 @@ const TaskRecoveryAgent = () => {
   });
 
   const totalCount = filteredRecords.length;
-  const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const paginatedRecords = filteredRecords.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
   );
 
   const handleReset = () => {
@@ -63,7 +77,7 @@ const TaskRecoveryAgent = () => {
   };
 
   const renderStatus = (status: AgentRecoveryRecord["status"]) => {
-    const dotColor = status === "已完成" ? "bg-green-500" : "bg-orange-500";
+    const dotColor = status === "已回收" ? "bg-green-500" : "bg-orange-500";
     return (
       <span className="inline-flex items-center gap-1.5 text-sm">
         <span className={`inline-block w-2 h-2 rounded-full ${dotColor}`} />
@@ -92,21 +106,49 @@ const TaskRecoveryAgent = () => {
     setAllocationDialogOpen(true);
   };
 
+  const handleEndTask = (record: AgentRecoveryRecord) => {
+    setRecordToEnd(record);
+    setEndTaskConfirmOpen(true);
+  };
+
+  const confirmEndTask = () => {
+    if (recordToEnd) {
+      toast.success(`代理「${recordToEnd.agentName}」的任务已结束`);
+      setEndTaskConfirmOpen(false);
+      setRecordToEnd(null);
+    }
+  };
+
   // Generate page numbers for pagination
   const getPageNumbers = () => {
     const pages: (number | "ellipsis")[] = [];
-    if (totalPages <= 5) {
+    if (totalPages <= 7) {
       for (let i = 1; i <= totalPages; i++) pages.push(i);
     } else {
-      pages.push(1, 2, 3);
+      pages.push(1);
       if (currentPage > 4) pages.push("ellipsis");
-      if (currentPage > 3 && currentPage < totalPages - 2) {
-        pages.push(currentPage);
+
+      const start = Math.max(2, currentPage - 2);
+      const end = Math.min(totalPages - 1, currentPage + 2);
+
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
       }
+
       if (currentPage < totalPages - 3) pages.push("ellipsis");
-      if (!pages.includes(totalPages)) pages.push(totalPages);
+      pages.push(totalPages);
     }
     return pages;
+  };
+
+  const handleGoToPage = () => {
+    const pageNum = parseInt(goToPage);
+    if (pageNum && pageNum >= 1 && pageNum <= totalPages) {
+      setCurrentPage(pageNum);
+      setGoToPage("");
+    } else {
+      toast.error(`请输入 1 到 ${totalPages} 之间的页码`);
+    }
   };
 
   return (
@@ -133,61 +175,75 @@ const TaskRecoveryAgent = () => {
 
       {/* Filters */}
       <div className="bg-card rounded-lg border border-border p-4">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm text-muted-foreground whitespace-nowrap">代理名称</span>
-            <Input
-              value={filterAgentName}
-              onChange={(e) => setFilterAgentName(e.target.value)}
-              placeholder="请输入代理名称"
-              className="w-40 h-9"
-            />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm text-muted-foreground whitespace-nowrap">代理名称</span>
+              <Input
+                value={filterAgentName}
+                onChange={(e) => setFilterAgentName(e.target.value)}
+                placeholder="请输入代理名称"
+                className="w-40 h-9"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm text-muted-foreground whitespace-nowrap">代理码</span>
+              <Input
+                value={filterAgentCode}
+                onChange={(e) => setFilterAgentCode(e.target.value)}
+                placeholder="请输入代理码"
+                className="w-40 h-9"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm text-muted-foreground whitespace-nowrap">采集码</span>
+              <Input
+                value={filterCollectionCode}
+                onChange={(e) => setFilterCollectionCode(e.target.value)}
+                placeholder="请输入采集码"
+                className="w-40 h-9"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm text-muted-foreground whitespace-nowrap">创建时间</span>
+              <Input
+                value={filterCreateTime}
+                onChange={(e) => setFilterCreateTime(e.target.value)}
+                placeholder="请输入创建时间"
+                className="w-40 h-9"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm text-muted-foreground whitespace-nowrap">状态</span>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="all">全部</option>
+                <option value="未回收">未回收</option>
+                <option value="已回收">已回收</option>
+              </select>
+            </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm text-muted-foreground whitespace-nowrap">代理码</span>
-            <Input
-              value={filterAgentCode}
-              onChange={(e) => setFilterAgentCode(e.target.value)}
-              placeholder="请输入代理码"
-              className="w-40 h-9"
-            />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm text-muted-foreground whitespace-nowrap">采集码</span>
-            <Input
-              value={filterCollectionCode}
-              onChange={(e) => setFilterCollectionCode(e.target.value)}
-              placeholder="请输入采集码"
-              className="w-40 h-9"
-            />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm text-muted-foreground whitespace-nowrap">创建时间</span>
-            <Input
-              value={filterCreateTime}
-              onChange={(e) => setFilterCreateTime(e.target.value)}
-              placeholder="请输入创建时间"
-              className="w-40 h-9"
-            />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm text-muted-foreground whitespace-nowrap">状态</span>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          <div className="flex items-center gap-2 shrink-0 ml-auto">
+            <Button variant="outline" size="sm" onClick={handleReset} className="h-9 px-4 gap-2 border-border text-foreground hover:bg-accent">
+              <RotateCcw className="h-4 w-4" />
+              重置
+            </Button>
+            <Button size="sm" onClick={handleQuery} className="h-9 px-6 bg-blue-600 hover:bg-blue-700 text-white">
+              <Search className="h-4 w-4 mr-1" /> 查询
+            </Button>
+            <button
+              className="h-9 w-9 flex items-center justify-center border border-border rounded-md hover:bg-accent transition-colors"
+              onClick={() => {
+                toast.success("刷新成功");
+                handleReset();
+              }}
             >
-              <option value="all">全部</option>
-              <option value="进行中">进行中</option>
-              <option value="已完成">已完成</option>
-            </select>
+              <RefreshCw className="h-4 w-4 text-muted-foreground" />
+            </button>
           </div>
-          <Button variant="outline" size="sm" onClick={handleReset}>
-            重置
-          </Button>
-          <Button size="sm" onClick={handleQuery}>
-            <Search className="h-4 w-4 mr-1" /> 查询
-          </Button>
         </div>
       </div>
 
@@ -216,7 +272,7 @@ const TaskRecoveryAgent = () => {
       {/* Table */}
       <div className="bg-card rounded-lg border border-border overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="admin-table w-full">
+          <table className="admin-table w-full whitespace-nowrap">
             <thead>
               <tr>
                 <th className="w-12">
@@ -232,7 +288,7 @@ const TaskRecoveryAgent = () => {
                 <th>已完成验收条数</th>
                 <th>状态</th>
                 <th>创建时间</th>
-                <th className="min-w-[280px]">操作</th>
+                <th className="min-w-[280px] sticky right-0 !bg-card z-20 shadow-[-6px_0_6px_-3px_rgba(0,0,0,0.05)] border-l">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -244,7 +300,7 @@ const TaskRecoveryAgent = () => {
                 </tr>
               ) : (
                 paginatedRecords.map((record, idx) => (
-                  <tr key={record.agentCode + "-" + idx}>
+                  <tr key={record.agentCode + "-" + idx} className="group">
                     <td className="text-center">
                       <input type="checkbox" className="accent-primary" />
                     </td>
@@ -258,7 +314,7 @@ const TaskRecoveryAgent = () => {
                     <td>{record.completedAcceptanceTerms}</td>
                     <td>{renderStatus(record.status)}</td>
                     <td>{record.createTime}</td>
-                    <td>
+                    <td className="sticky right-0 !bg-card z-10 shadow-[-6px_0_6px_-3px_rgba(0,0,0,0.05)] border-l transition-colors group-hover:!bg-accent">
                       <div className="flex items-center flex-wrap">
                         <button
                           className="text-xs text-primary hover:text-primary/80 mr-2"
@@ -276,6 +332,14 @@ const TaskRecoveryAgent = () => {
                         >
                           修改任务分配
                         </button>
+                        {record.status === "未回收" && (
+                          <button
+                            className="text-xs text-destructive hover:text-destructive/80 mr-2"
+                            onClick={() => handleEndTask(record)}
+                          >
+                            结束任务
+                          </button>
+                        )}
                         <button
                           className="text-xs text-primary hover:text-primary/80"
                           onClick={() =>
@@ -296,34 +360,62 @@ const TaskRecoveryAgent = () => {
         </div>
       </div>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-end gap-2 text-sm text-muted-foreground">
-        <span>共{totalCount}条记录</span>
-        <span>
-          第 {currentPage}/{totalPages}
-        </span>
-        <div className="flex items-center gap-1">
+      {/* End Task Confirmation */}
+      <AlertDialog
+        open={endTaskConfirmOpen}
+        onOpenChange={setEndTaskConfirmOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>结束任务确认</AlertDialogTitle>
+            <AlertDialogDescription className="text-destructive font-medium">
+              任务结束后，将回收全部词条，无法继续执行录制任务。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setRecordToEnd(null)}>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmEndTask} className="bg-destructive hover:bg-destructive/90">确定</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 分页控制 */}
+      <div className="flex items-center justify-end gap-3 text-sm text-muted-foreground mt-4">
+        <span>共 {totalCount} 条</span>
+        <select
+          className="h-7 px-2 text-xs border border-border rounded bg-background cursor-pointer hover:border-primary/50 transition-colors focus:outline-none focus:ring-1 focus:ring-primary"
+          value={pageSize}
+          onChange={(e) => {
+            const newSize = Number(e.target.value);
+            setPageSize(newSize);
+            setCurrentPage(1);
+          }}
+        >
+          <option value={10}>10条/页</option>
+          <option value={20}>20条/页</option>
+          <option value={50}>50条/页</option>
+        </select>
+        <div className="flex items-center gap-0.5">
           <button
             disabled={currentPage <= 1}
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            className="px-2 py-1 border border-border rounded text-xs hover:bg-muted disabled:opacity-50"
+            className="w-7 h-7 flex items-center justify-center border border-border rounded text-xs hover:bg-accent disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
           >
             &lt;
           </button>
           {getPageNumbers().map((p, idx) =>
             p === "ellipsis" ? (
-              <span key={`ellipsis-${idx}`} className="px-1">
+              <span key={`e-${idx}`} className="w-7 h-7 flex items-center justify-center text-xs">
                 ...
               </span>
             ) : (
               <button
                 key={p}
                 onClick={() => setCurrentPage(p)}
-                className={`px-2.5 py-1 border rounded text-xs ${
-                  currentPage === p
-                    ? "border-primary text-primary bg-primary/5"
-                    : "border-border hover:bg-muted"
-                }`}
+                className={`w-7 h-7 flex items-center justify-center rounded text-xs cursor-pointer ${currentPage === p
+                  ? "bg-primary text-primary-foreground font-medium"
+                  : "border border-border hover:bg-accent"
+                  }`}
               >
                 {p}
               </button>
@@ -332,10 +424,20 @@ const TaskRecoveryAgent = () => {
           <button
             disabled={currentPage >= totalPages}
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            className="px-2 py-1 border border-border rounded text-xs hover:bg-muted disabled:opacity-50"
+            className="w-7 h-7 flex items-center justify-center border border-border rounded text-xs hover:bg-accent disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
           >
             &gt;
           </button>
+        </div>
+        <div className="flex items-center gap-1">
+          <span>前往</span>
+          <input
+            className="w-10 h-7 px-1 text-xs text-center border border-border rounded bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+            value={goToPage}
+            onChange={(e) => setGoToPage(e.target.value.replace(/\D/g, ""))}
+            onKeyDown={(e) => e.key === "Enter" && handleGoToPage()}
+          />
+          <span>页</span>
         </div>
       </div>
 
@@ -343,13 +445,14 @@ const TaskRecoveryAgent = () => {
       <TaskAllocationDialog
         open={allocationDialogOpen}
         onOpenChange={setAllocationDialogOpen}
-        onConfirm={handleAllocationConfirm}
-        editRecord={editingRecord}
+        mode="agent"
+        onOpenPersonnel={() => setPersonnelDialogOpen(true)}
       />
 
       <PersonnelAssignDialog
         open={personnelDialogOpen}
         onOpenChange={setPersonnelDialogOpen}
+        onConfirm={() => toast.success("人员选人成功")}
       />
 
       <ShareWarningDialog

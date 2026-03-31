@@ -143,7 +143,7 @@ export const mockAgentRecovery: AgentRecoveryRecord[] = [
     genderRatio: "24：6",
     completedAcceptanceCount: "27/30",
     completedAcceptanceTerms: "27/100",
-    status: "进行中",
+    status: "未回收",
     createTime: "2025/12/23 08:04:00",
   },
   {
@@ -155,7 +155,7 @@ export const mockAgentRecovery: AgentRecoveryRecord[] = [
     genderRatio: "30：20",
     completedAcceptanceCount: "50/50",
     completedAcceptanceTerms: "50/50",
-    status: "已完成",
+    status: "已回收",
     createTime: "2026/01/01 09:01:00",
   },
 ];
@@ -170,7 +170,7 @@ export const mockNonAgentRecovery: NonAgentRecoveryRecord[] = [
     completedAcceptanceCount: "27/30",
     completedAcceptanceTerms: "27/100",
     createTime: "2026/01/05 10:00:00",
-    status: "进行中",
+    status: "未回收",
   },
   {
     planIndex: 2,
@@ -181,7 +181,7 @@ export const mockNonAgentRecovery: NonAgentRecoveryRecord[] = [
     completedAcceptanceCount: "40/40",
     completedAcceptanceTerms: "40/50",
     createTime: "2026/01/10 14:00:00",
-    status: "已完成",
+    status: "已回收",
   },
 ];
 
@@ -227,11 +227,11 @@ export const mockPersonnelRecovery: PersonnelRecoveryRecord[] = [
 ];
 
 export const mockAudioDetails: AudioDetailRecord[] = [
-  { termIndex: 1, audioRowkey: "row-key-123", language: "普通话", speed: "正常语速", recordingText: "小明你好", recognitionResult: "你好", textMatchConsistent: false, audioFormat: "WAV", acceptanceStatus: "已打回", remark: "打回说明", createTime: "2026/02/02 12:10:10" },
-  { termIndex: 2, audioRowkey: "row-key-124", language: "普通话", speed: "快语速", recordingText: "打开空调", recognitionResult: "打开空调", textMatchConsistent: true, audioFormat: "WAV", acceptanceStatus: "已通过", remark: "", createTime: "2026/02/02 12:15:00" },
-  { termIndex: 3, audioRowkey: "row-key-125", language: "粤语", speed: "正常语速", recordingText: "你好世界", recognitionResult: "", textMatchConsistent: false, audioFormat: "WAV", acceptanceStatus: "待验收", remark: "", createTime: "2026/02/02 12:20:00" },
-  { termIndex: 4, audioRowkey: "row-key-126", language: "四川话", speed: "慢语速", recordingText: "播放音乐", recognitionResult: "播放音乐", textMatchConsistent: true, audioFormat: "MP3", acceptanceStatus: "已补录", remark: "", createTime: "2026/02/02 12:25:00" },
-  { termIndex: 5, audioRowkey: "row-key-127", language: "普通话", speed: "正常语速", recordingText: "关闭灯光", recognitionResult: "", textMatchConsistent: false, audioFormat: "WAV", acceptanceStatus: "已废弃", remark: "管理员废弃", createTime: "2026/02/02 12:30:00" },
+  { termIndex: 1, audioRowkey: "row-key-123", language: "普通话", speed: "正常语速", recordingText: "小明你好", recognitionResult: "小明你好", textMatchConsistent: true, audioFormat: "wav", acceptanceStatus: "已打回", remark: "打回说明", updateTime: "2026/02/02 12:10:10" },
+  { termIndex: 2, audioRowkey: "row-key-124", language: "普通话", speed: "快语速", recordingText: "打开空调", recognitionResult: "打开空调", textMatchConsistent: true, audioFormat: "wav", acceptanceStatus: "已通过", remark: "", updateTime: "2026/02/02 12:15:00" },
+  { termIndex: 3, audioRowkey: "", language: "粤语", speed: "正常语速", recordingText: "你好世界", recognitionResult: "", textMatchConsistent: false, audioFormat: "wav", acceptanceStatus: "待上传", remark: "", updateTime: "2026/02/02 12:20:00" },
+  { termIndex: 4, audioRowkey: "row-key-126", language: "四川话", speed: "慢语速", recordingText: "播放音乐", recognitionResult: "播放音", textMatchConsistent: false, audioFormat: "wav", acceptanceStatus: "已补录", remark: "", updateTime: "2026/02/02 12:25:00" },
+  { termIndex: 5, audioRowkey: "", language: "普通话", speed: "正常语速", recordingText: "关闭灯光", recognitionResult: "关闭灯光", textMatchConsistent: true, audioFormat: "wav", acceptanceStatus: "已废弃", remark: "管理员废弃", updateTime: "2026/02/02 12:30:00" },
 ];
 
 export const mockPersonnelList: PersonnelAssignRecord[] = [

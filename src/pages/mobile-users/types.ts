@@ -23,10 +23,12 @@ export interface MobileUser {
 
 export interface RecorderRecord {
   id: string;
+  userId: string; // 关联的移动端用户ID
   nickname: string;
   gender: string;
   age: number;
   contact: string;
   growthLocation: string;
   createTime: string;
+  isSyncRecorder?: boolean; // 是否为同步创建的默认录音人
 }

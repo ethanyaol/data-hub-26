@@ -2,7 +2,9 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Search, RefreshCw, X, ChevronDown, ChevronUp, RotateCcw, KeyRound } from "lucide-react";
 import { toast } from "sonner";
-import { mockMobileUsers } from "./mockData";
+import ResetPasswordDialog from "@/components/ResetPasswordDialog";
+import { mockMobileUsers, mockRecorders } from "./mockData";
+import { STORAGE_KEYS, getStorageData, setStorageData } from "@/utils/storage";
 import type { MobileUser } from "./types";
 import { DEVICE_TYPES, USER_ROLES, USER_STATUSES } from "./types";
 import EditMobileUserDialog from "@/components/mobile-users/EditMobileUserDialog";
@@ -21,7 +23,9 @@ import {
 
 const MobileUserList = () => {
   const navigate = useNavigate();
-  const [users, setUsers] = useState<MobileUser[]>(mockMobileUsers);
+  const [users, setUsers] = useState<MobileUser[]>(() => 
+    getStorageData(STORAGE_KEYS.MOBILE_USERS, mockMobileUsers)
+  );
   const totalCount = 500; // 总注册用户数一致
 
   // 脱敏辅助函数
@@ -51,7 +55,10 @@ const MobileUserList = () => {
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [pageSize, setPageSize] = useState(10);
+  const [goToPage, setGoToPage] = useState("");
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [targetUserForReset, setTargetUserForReset] = useState<MobileUser | null>(null);
 
   // Dialog
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -80,10 +87,10 @@ const MobileUserList = () => {
     return true;
   });
 
-  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredUsers.length / pageSize);
   const paginatedUsers = filteredUsers.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
   );
 
   const handleReset = () => {
@@ -103,6 +110,37 @@ const MobileUserList = () => {
     setCurrentPage(1);
   };
 
+  const getPageNumbers = () => {
+    const pages: (number | "ellipsis")[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 4) pages.push("ellipsis");
+
+      const start = Math.max(2, currentPage - 2);
+      const end = Math.min(totalPages - 1, currentPage + 2);
+
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+
+      if (currentPage < totalPages - 3) pages.push("ellipsis");
+      pages.push(totalPages);
+    }
+    return pages;
+  };
+
+  const handleGoToPage = () => {
+    const pageNum = parseInt(goToPage);
+    if (pageNum && pageNum >= 1 && pageNum <= totalPages) {
+      setCurrentPage(pageNum);
+      setGoToPage("");
+    } else {
+      toast.error(`请输入 1 到 ${totalPages} 之间的页码`);
+    }
+  };
+
   const handleAddUser = () => {
     setEditDialogMode("add");
     setEditingUser(null);
@@ -115,56 +153,91 @@ const MobileUserList = () => {
     setEditDialogOpen(true);
   };
 
-  const handleSaveUser = (data: { name: string; loginPhone: string; role: string; status: string }) => {
+  const handleSaveUser = (data: { 
+    name: string; 
+    loginPhone: string; 
+    role: string; 
+    status: string;
+    recorder?: {
+      gender: string;
+      age: number;
+      contact: string;
+      growthLocation: string;
+    }
+  }) => {
     if (editDialogMode === "add") {
+      const userId = `user-${Date.now()}`;
       const newUser: MobileUser = {
-        id: `user-${Date.now()}`,
+        id: userId,
         name: data.name,
         loginPhone: data.loginPhone,
-        role: data.role as MobileUser["role"],
+        role: data.role as any,
         deviceType: "",
         accountName: "",
         deviceModel: "",
         userSource: "4A",
         organization: "",
-        status: data.status as MobileUser["status"],
+        status: data.status as any,
         createTime: new Date().toLocaleString("zh-CN").replace(/\//g, "/"),
       };
-      setUsers((prev) => [newUser, ...prev]);
-      toast.success("用户添加成功");
+      
+      // 同步创建录音人
+      if (data.recorder) {
+        const recorders = getStorageData(STORAGE_KEYS.RECORDERS, mockRecorders);
+        const newRecorder = {
+          id: `rec-${Date.now()}`,
+          userId: userId,
+          nickname: data.name,
+          gender: data.recorder.gender,
+          age: data.recorder.age,
+          contact: data.recorder.contact,
+          growthLocation: data.recorder.growthLocation,
+          createTime: newUser.createTime,
+          isSyncRecorder: true,
+        };
+        setStorageData(STORAGE_KEYS.RECORDERS, [newRecorder, ...recorders]);
+      }
+
+      const updatedUsers = [newUser, ...users];
+      setUsers(updatedUsers);
+      setStorageData(STORAGE_KEYS.MOBILE_USERS, updatedUsers);
+      toast.success("用户添加成功，已同步创建默认录音人");
     } else if (editingUser) {
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === editingUser.id
-            ? {
-              ...u,
-              name: data.name,
-              loginPhone: data.loginPhone,
-              role: data.role as MobileUser["role"],
-              status: data.status as MobileUser["status"]
-            }
-            : u
-        )
+      const isNameChanged = editingUser.name !== data.name;
+      
+      const updatedUsers: MobileUser[] = users.map((u) =>
+        u.id === editingUser.id
+          ? {
+            ...u,
+            name: data.name,
+            loginPhone: data.loginPhone,
+            role: data.role as any,
+            status: data.status as any
+          }
+          : u
       );
+      
+      // 同步修改录音人姓名
+      if (isNameChanged) {
+        const recorders = getStorageData(STORAGE_KEYS.RECORDERS, mockRecorders);
+        const updatedRecorders = recorders.map((r: any) => 
+          (r.userId === editingUser.id && r.isSyncRecorder) 
+            ? { ...r, nickname: data.name } 
+            : r
+        );
+        setStorageData(STORAGE_KEYS.RECORDERS, updatedRecorders);
+        toast.info("检测到姓名变更，已同步更新默认录音人昵称");
+      }
+
+      setUsers(updatedUsers);
+      setStorageData(STORAGE_KEYS.MOBILE_USERS, updatedUsers);
       toast.success("用户信息已更新");
     }
   };
 
   const handleResetPassword = (user: MobileUser) => {
-    setConfirmDialog({
-      open: true,
-      title: "确认重置密码",
-      description: `确认将用户"${user.name || user.loginPhone}"的登录密码重置为默认密码？重置后，该用户下次登录时将被要求必须修改密码。`,
-      onConfirm: () => {
-        setUsers((prev) =>
-          prev.map((u) =>
-            u.id === user.id ? { ...u, isDefaultPassword: true } : u
-          )
-        );
-        toast.success("密码已重置为默认密码");
-        setConfirmDialog((prev) => ({ ...prev, open: false }));
-      },
-    });
+    setTargetUserForReset(user);
+    setResetDialogOpen(true);
   };
 
   const handleToggleStatus = (user: MobileUser) => {
@@ -178,11 +251,11 @@ const MobileUserList = () => {
           ? `确认停用用户"${user.name || user.loginPhone}"？停用后该用户登录时将显示"该账号已停用，请联系管理员"`
           : `确认启用用户"${user.name || user.loginPhone}"？`,
       onConfirm: () => {
-        setUsers((prev) =>
-          prev.map((u) =>
-            u.id === user.id ? { ...u, status: newStatus } : u
-          )
+        const updatedUsers = users.map((u) =>
+          u.id === user.id ? { ...u, status: newStatus as any } : u
         );
+        setUsers(updatedUsers as any);
+        setStorageData(STORAGE_KEYS.MOBILE_USERS, updatedUsers);
         toast.success(`已${action}用户`);
         setConfirmDialog((prev) => ({ ...prev, open: false }));
       },
@@ -375,7 +448,7 @@ const MobileUserList = () => {
                 paginatedUsers.map((user, index) => (
                   <tr key={user.id}>
                     <td>
-                      {totalCount - ((currentPage - 1) * itemsPerPage + index)}
+                      {totalCount - ((currentPage - 1) * pageSize + index)}
                     </td>
                     <td>{maskPhone(user.loginPhone)}</td>
                     <td>{maskName(user.name)}</td>
@@ -443,45 +516,66 @@ const MobileUserList = () => {
           </table>
         </div>
 
-        {/* Pagination */}
+        {/* 分页控制 */}
         {filteredUsers.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-            <span className="text-sm text-muted-foreground">
-              展示 {(currentPage - 1) * itemsPerPage + 1} 到{" "}
-              {Math.min(currentPage * itemsPerPage, filteredUsers.length)}，共{" "}
-              {filteredUsers.length} 条数据
-            </span>
-            <div className="flex items-center gap-1">
+          <div className="flex items-center justify-end gap-3 text-sm text-muted-foreground px-4 py-3 border-t border-border">
+            <span>共 {filteredUsers.length} 条</span>
+            <select
+              className="h-7 px-2 text-xs border border-border rounded bg-background cursor-pointer hover:border-primary/50 transition-colors focus:outline-none focus:ring-1 focus:ring-primary"
+              value={pageSize}
+              onChange={(e) => {
+                const newSize = Number(e.target.value);
+                setPageSize(newSize);
+                setCurrentPage(1);
+              }}
+            >
+              <option value={10}>10条/页</option>
+              <option value={20}>20条/页</option>
+              <option value={50}>50条/页</option>
+            </select>
+            <div className="flex items-center gap-0.5">
               <button
-                className="px-3 py-1 text-sm border border-input rounded hover:bg-accent disabled:opacity-50"
+                disabled={currentPage <= 1}
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
+                className="w-7 h-7 flex items-center justify-center border border-border rounded text-xs hover:bg-accent disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
               >
-                上一页
+                &lt;
               </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                (page) => (
+              {getPageNumbers().map((p, idx) =>
+                p === "ellipsis" ? (
+                  <span key={`e-${idx}`} className="w-7 h-7 flex items-center justify-center text-xs">
+                    ...
+                  </span>
+                ) : (
                   <button
-                    key={page}
-                    className={`px-3 py-1 text-sm border rounded ${page === currentPage
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "border-input hover:bg-accent"
+                    key={p}
+                    onClick={() => setCurrentPage(p)}
+                    className={`w-7 h-7 flex items-center justify-center rounded text-xs cursor-pointer ${currentPage === p
+                      ? "bg-primary text-primary-foreground font-medium"
+                      : "border border-border hover:bg-accent"
                       }`}
-                    onClick={() => setCurrentPage(page)}
                   >
-                    {page}
+                    {p}
                   </button>
                 )
               )}
               <button
-                className="px-3 py-1 text-sm border border-input rounded hover:bg-accent disabled:opacity-50"
-                onClick={() =>
-                  setCurrentPage((p) => Math.min(totalPages, p + 1))
-                }
-                disabled={currentPage === totalPages}
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                className="w-7 h-7 flex items-center justify-center border border-border rounded text-xs hover:bg-accent disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
               >
-                下一页
+                &gt;
               </button>
+            </div>
+            <div className="flex items-center gap-1">
+              <span>前往</span>
+              <input
+                className="w-10 h-7 px-1 text-xs text-center border border-border rounded bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                value={goToPage}
+                onChange={(e) => setGoToPage(e.target.value.replace(/\D/g, ""))}
+                onKeyDown={(e) => e.key === "Enter" && handleGoToPage()}
+              />
+              <span>页</span>
             </div>
           </div>
         )}
@@ -518,6 +612,22 @@ const MobileUserList = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ResetPasswordDialog
+        open={resetDialogOpen}
+        onOpenChange={setResetDialogOpen}
+        user={targetUserForReset}
+        onConfirm={(newPassword) => {
+          if (targetUserForReset) {
+            const updatedUsers = users.map((u) =>
+              u.id === targetUserForReset.id ? { ...u, isDefaultPassword: false } : u
+            );
+            setUsers(updatedUsers as any);
+            setStorageData(STORAGE_KEYS.MOBILE_USERS, updatedUsers);
+            toast.success(`用户 "${targetUserForReset.name || targetUserForReset.loginPhone}" 的密码已重置成功`);
+          }
+        }}
+      />
     </div>
   );
 };

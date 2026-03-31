@@ -188,10 +188,25 @@ const renderPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, value }: {
 // Page Component
 // ============================================================
 const Overview = () => {
-  const [selectedTask, setSelectedTask] = useState(mockTasks[0].value);
-  const [barData] = useState(generateBarData);
+  const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<"visual" | "table">("visual");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+
+  const barData = useMemo(() => {
+    const baseData = generateBarData();
+    // 模拟根据选中任务数量调整幅值
+    // 如果没有选择，则视为“全部”，此时使用默认生成的数据
+    if (selectedTasks.length === 0) return baseData;
+    
+    // 如果选择了特定任务，模拟其数据量（通常特定任务的数据量会小于整体）
+    const factor = Math.max(0.2, selectedTasks.length / mockTasks.length);
+    return baseData.map(item => ({
+      ...item,
+      uploadCount: Math.round(item.uploadCount * factor),
+      inspectedCount: Math.round(item.inspectedCount * factor),
+      activeUsers: Math.max(1, Math.round(item.activeUsers * factor)),
+    }));
+  }, [selectedTasks]);
   // 列表视图状态
   const [tableTasks, setTableTasks] = useState<string[]>([]);
   const [tableDateRange, setTableDateRange] = useState<DateRange | undefined>();
@@ -314,21 +329,18 @@ const Overview = () => {
             </div>
 
             <div className="bg-white rounded-xl border border-gray-100 p-5">
-              {/* 筛选栏 */}
-              <div className="flex items-center justify-between mb-5">
-                <select
-                  className="h-9 px-3 text-sm border border-gray-200 rounded-lg bg-white w-52 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors"
-                  value={selectedTask}
-                  onChange={(e) => setSelectedTask(e.target.value)}
-                >
-                  {mockTasks.map((t) => (
-                    <option key={t.value} value={t.value}>{t.label}</option>
-                  ))}
-                </select>
+              <div className="flex items-center gap-3 mb-5">
+                <MultiSelectFuzzySearch
+                  options={mockTasks}
+                  selectedValues={selectedTasks}
+                  onSelect={setSelectedTasks}
+                  placeholder="选择任务 (留空表示全部)..."
+                  className="w-64"
+                />
                 <DateRangePicker
                   dateRange={dateRange}
                   onSelect={setDateRange}
-                  className="w-auto"
+                  className="w-auto ml-auto"
                 />
               </div>
 

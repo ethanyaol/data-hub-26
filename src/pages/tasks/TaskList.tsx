@@ -4,6 +4,7 @@ import { Plus, Search, RefreshCw, ChevronDown, ChevronUp, RotateCcw } from "luci
 import { toast } from "sonner";
 import { mockTasks } from "./mockData";
 import type { TaskRecord } from "./types";
+import { STORAGE_KEYS, getStorageData, setStorageData } from "@/utils/storage";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { Button } from "@/components/ui/button";
 import type { DateRange } from "react-day-picker";
@@ -59,6 +60,11 @@ const TaskList = () => {
   const [filterPublished, setFilterPublished] = useState("");
   const [pageSize, setPageSize] = useState(10);
 
+  // 数据状态（持久化）
+  const [tasks, setTasks] = useState<TaskRecord[]>(() =>
+    getStorageData(STORAGE_KEYS.TASKS, mockTasks)
+  );
+
   // UI 状态
   const [expanded, setExpanded] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -75,7 +81,7 @@ const TaskList = () => {
 
   // 筛选逻辑
   const filteredTasks = useMemo(() => {
-    return mockTasks.filter((task) => {
+    return tasks.filter((task) => {
       if (filterSearchTerm) {
         const term = filterSearchTerm.toLowerCase();
         if (!(task.id.toLowerCase().includes(term) || task.title.toLowerCase().includes(term))) return false;
@@ -100,6 +106,7 @@ const TaskList = () => {
       return true;
     });
   }, [
+    tasks,
     filterSearchTerm,
     filterRecordingType,
     filterPurpose,
@@ -165,8 +172,8 @@ const TaskList = () => {
     }
   };
 
-  const handleTaskDetail = () => {
-    toast.info("功能开发中");
+  const handleTaskDetail = (task: TaskRecord) => {
+    navigate(`/dashboard/tasks/${task.id}/detail`);
   };
 
   // 带有确认环节的操作处理程序完成翻译
@@ -176,6 +183,9 @@ const TaskList = () => {
       title: "停用任务",
       description: `确定要停用任务「${task.title}」吗？`,
       onConfirm: () => {
+        const newTasks = tasks.map(t => t.id === task.id ? { ...t, status: "已结束" as const } : t);
+        setTasks(newTasks);
+        setStorageData(STORAGE_KEYS.TASKS, newTasks);
         toast.success(`任务「${task.title}」已停用`);
         setConfirmDialog((prev) => ({ ...prev, open: false }));
       },
@@ -188,6 +198,9 @@ const TaskList = () => {
       title: "删除任务",
       description: `确定要删除任务「${task.title}」吗？此操作不可恢复。`,
       onConfirm: () => {
+        const newTasks = tasks.filter(t => t.id !== task.id);
+        setTasks(newTasks);
+        setStorageData(STORAGE_KEYS.TASKS, newTasks);
         toast.success(`任务「${task.title}」已删除`);
         setConfirmDialog((prev) => ({ ...prev, open: false }));
       },
@@ -200,6 +213,9 @@ const TaskList = () => {
       title: "任务归档",
       description: `确定要归档任务「${task.title}」吗？`,
       onConfirm: () => {
+        const newTasks = tasks.map(t => t.id === task.id ? { ...t, status: "已归档" as const } : t);
+        setTasks(newTasks);
+        setStorageData(STORAGE_KEYS.TASKS, newTasks);
         toast.success(`任务「${task.title}」已归档`);
         setConfirmDialog((prev) => ({ ...prev, open: false }));
       },
@@ -212,15 +228,15 @@ const TaskList = () => {
       title: "启用任务",
       description: `确定要启用任务「${task.title}」吗？`,
       onConfirm: () => {
+        const newTasks = tasks.map(t => t.id === task.id ? { ...t, status: "进行中" as const } : t);
+        setTasks(newTasks);
+        setStorageData(STORAGE_KEYS.TASKS, newTasks);
         toast.success(`任务「${task.title}」已启用`);
         setConfirmDialog((prev) => ({ ...prev, open: false }));
       },
     });
   };
 
-  const handleExport = (task: TaskRecord) => {
-    toast.success(`任务「${task.title}」正在导出到数据集/云盘`);
-  };
 
   const handleDownload = (task: TaskRecord) => {
     toast.success(`任务「${task.title}」正在下载`);
@@ -230,11 +246,31 @@ const TaskList = () => {
   const renderActions = (task: TaskRecord) => {
     switch (task.status) {
       case "进行中":
+        // 如果是草稿态（未发布），仅显示详情和删除
+        if (!task.isPublished) {
+          return (
+            <>
+              <button
+                className="text-primary hover:text-primary/80"
+                onClick={() => handleTaskDetail(task)}
+              >
+                任务详情
+              </button>
+              <button
+                className="text-destructive hover:text-destructive/80"
+                onClick={() => handleDeleteTask(task)}
+              >
+                删除
+              </button>
+            </>
+          );
+        }
+        // 正式发布的进行中任务，显示全量操作项
         return (
           <>
             <button
               className="text-primary hover:text-primary/80"
-              onClick={handleTaskDetail}
+              onClick={() => handleTaskDetail(task)}
             >
               任务详情
             </button>
@@ -263,7 +299,7 @@ const TaskList = () => {
           <>
             <button
               className="text-primary hover:text-primary/80"
-              onClick={handleTaskDetail}
+              onClick={() => handleTaskDetail(task)}
             >
               任务详情
             </button>
@@ -298,7 +334,7 @@ const TaskList = () => {
           <>
             <button
               className="text-primary hover:text-primary/80"
-              onClick={handleTaskDetail}
+              onClick={() => handleTaskDetail(task)}
             >
               任务详情
             </button>
@@ -307,12 +343,6 @@ const TaskList = () => {
               onClick={() => handleRecoveryDetail(task)}
             >
               任务回收详情
-            </button>
-            <button
-              className="text-primary hover:text-primary/80"
-              onClick={() => handleExport(task)}
-            >
-              导出到数据集/云盘
             </button>
             <button
               className="text-primary hover:text-primary/80"
@@ -370,12 +400,12 @@ const TaskList = () => {
             <div className="relative group">
               <input
                 className="h-9 w-64 px-3 text-sm border border-border rounded-md bg-transparent placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring pr-8"
-                placeholder="搜索任务ID或任务名称..."
+                placeholder="搜索任务ID或任务标题..."
                 value={filterSearchTerm}
                 onChange={(e) => setFilterSearchTerm(e.target.value)}
               />
               {filterSearchTerm && (
-                <div 
+                <div
                   className="absolute right-2 top-1/2 -translate-y-1/2 h-full px-1 flex items-center cursor-pointer hover:bg-muted/50 rounded-sm transition-colors z-10 group/clear"
                   onPointerDown={(e) => {
                     e.preventDefault();
@@ -397,7 +427,7 @@ const TaskList = () => {
                 onChange={(e) => setFilterInitiator(e.target.value)}
               />
               {filterInitiator && (
-                <X 
+                <X
                   className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground hover:text-destructive cursor-pointer"
                   onClick={() => setFilterInitiator("")}
                 />
@@ -522,7 +552,7 @@ const TaskList = () => {
                 </th>
                 <th>任务ID</th>
                 <th>任务类型</th>
-                <th>任务名称</th>
+                <th>任务标题</th>
                 <th>录制类型</th>
                 <th>任务用途</th>
                 <th>预估份数</th>
@@ -533,7 +563,7 @@ const TaskList = () => {
                 <th>是否发布</th>
                 <th>任务状态</th>
                 <th>创建时间</th>
-                <th className="min-w-[260px] sticky right-0 bg-card z-20 shadow-[-6px_0_6px_-3px_rgba(0,0,0,0.05)] border-l">操作</th>
+                <th className="min-w-[260px] sticky right-0 !bg-card z-20 shadow-[-6px_0_6px_-3px_rgba(0,0,0,0.05)] border-l">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -615,7 +645,7 @@ const TaskList = () => {
                       </span>
                     </td>
                     <td className="text-muted-foreground text-xs">{task.createTime}</td>
-                    <td className="sticky right-0 bg-card z-10 shadow-[-6px_0_6px_-3px_rgba(0,0,0,0.05)] border-l transition-colors group-hover:bg-accent">
+                    <td className="sticky right-0 !bg-card z-10 shadow-[-6px_0_6px_-3px_rgba(0,0,0,0.05)] border-l transition-colors group-hover:!bg-accent">
                       <div className="flex items-center gap-2 text-sm whitespace-nowrap">
                         {renderActions(task)}
                       </div>

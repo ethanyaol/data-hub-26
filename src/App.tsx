@@ -15,6 +15,7 @@ import ComingSoon from "./pages/ComingSoon";
 import NotFound from "./pages/NotFound";
 import TaskList from "./pages/tasks/TaskList";
 import CreateTask from "./pages/tasks/CreateTask";
+import TaskDetail from "./pages/tasks/TaskDetail";
 import TaskRecoveryAgent from "./pages/tasks/TaskRecoveryAgent";
 import TaskRecoveryNonAgent from "./pages/tasks/TaskRecoveryNonAgent";
 import ViewSubtasksAgent from "./pages/tasks/ViewSubtasksAgent";
@@ -43,6 +44,7 @@ const App = () => (
             <Route path="user-management/detail/:id" element={<UserDetail />} />
             <Route path="tasks" element={<TaskList />} />
             <Route path="tasks/create" element={<CreateTask />} />
+            <Route path="tasks/:taskId/detail" element={<TaskDetail />} />
             <Route path="tasks/:taskId/recovery" element={<TaskRecoveryAgent />} />
             <Route path="tasks/:taskId/recovery-plan" element={<TaskRecoveryNonAgent />} />
             <Route path="tasks/:taskId/recovery/:agentId/subtasks" element={<ViewSubtasksAgent />} />

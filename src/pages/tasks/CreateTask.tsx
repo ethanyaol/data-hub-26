@@ -7,8 +7,9 @@ import {
 import { format, parseISO, parse, isBefore, startOfDay } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { toast } from "sonner";
-import { mockTerms } from "./mockData";
-import type { TaskTerm } from "./types";
+import { mockTerms, mockTasks } from "./mockData";
+import type { TaskTerm, TaskRecord } from "./types";
+import { STORAGE_KEYS, getStorageData, setStorageData } from "@/utils/storage";
 import { TASK_PURPOSES, RECORDING_TYPES, LANGUAGES, SPEEDS } from "./types";
 import AddTermDialog from "@/components/tasks/AddTermDialog";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -244,15 +245,46 @@ const CreateTask = () => {
     setCurrentStep((prev) => Math.max(prev - 1, 1));
   };
 
+  const handleSaveData = (status: "进行中" | "已结束" | "已归档", isPublishedValue: boolean) => {
+    // 如果是保存草稿 (isPublishedValue === false)，则仅需校验第一步
+    if (!isPublishedValue) {
+      if (!validateStep(1)) return;
+    } else {
+      // 如果是发布 (isPublishedValue === true)，则需通过前三步的全部校验
+      if (!validateStep(1) || !validateStep(2) || !validateStep(3)) return;
+    }
+
+    const newTask: TaskRecord = {
+      id: `task-${Date.now()}`,
+      taskType: "音频",
+      title,
+      recordingType: recordingMode === "quantitative" ? "定量录制，不重复录制" : "整份录制，重复录制",
+      taskPurpose: taskPurpose as any,
+      estimatedCount: parseInt(estimatedCount) || 0,
+      initiator: initiator.split("(")[0],
+      demandInfo,
+      isAgentMode: agentMode === "yes",
+      endTime: endDate,
+      isPublished: isPublishedValue,
+      status: status,
+      createTime: format(new Date(), "yyyy/MM/dd HH:mm:ss"),
+      tag: taskPurpose === "暂无" ? "通用" : taskPurpose,
+    };
+
+    const existingTasks = getStorageData(STORAGE_KEYS.TASKS, mockTasks);
+    const updatedTasks = [newTask, ...existingTasks];
+    setStorageData(STORAGE_KEYS.TASKS, updatedTasks);
+
+    toast.success(isPublishedValue ? "任务发布成功" : "任务保存成功");
+    navigate("/dashboard/tasks");
+  };
+
   const handleSave = () => {
-    if (!validateStep(1) || !validateStep(2) || !validateStep(3)) return;
-    toast.success("任务保存成功");
+    handleSaveData("进行中", false); // 保存草稿：状态进行中，发布状态为否
   };
 
   const handlePublish = () => {
-    if (!validateStep(1) || !validateStep(2) || !validateStep(3)) return;
-    toast.success("任务发布成功");
-    navigate("/dashboard/tasks");
+    handleSaveData("进行中", true); // 发布任务：状态进行中，发布状态为是
   };
 
   return (
@@ -912,12 +944,6 @@ const CreateTask = () => {
                     </button>
                   )}
                 </div>
-                {privacyFile && (
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-success" />
-                    <span className="text-xs font-semibold text-success">内容已合规</span>
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -1084,19 +1110,32 @@ const CreateTask = () => {
           )}
 
           {currentStep < steps.length ? (
-            <Button
-              onClick={nextStep}
-              className="h-11 px-12 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all font-semibold"
-              type="button"
-            >
-              继续下一步
-            </Button>
+            <div className="flex items-center gap-3">
+              {currentStep > 1 && (
+                <Button
+                  variant="outline"
+                  onClick={handleSave}
+                  className="h-11 px-8 border-primary/20 text-primary hover:bg-primary/5 transition-all"
+                  type="button"
+                >
+                  保存草稿
+                </Button>
+              )}
+              <Button
+                onClick={nextStep}
+                className="h-11 px-12 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all font-semibold"
+                type="button"
+              >
+                继续下一步
+              </Button>
+            </div>
           ) : (
             <div className="flex items-center gap-3">
               <Button
                 variant="outline"
                 onClick={handleSave}
-                className="h-11 px-8 border-primary/20 text-primary hover:bg-primary/5"
+                className="h-11 px-8 border-primary/20 text-primary hover:bg-primary/5 transition-all"
+                type="button"
               >
                 保存草稿
               </Button>
@@ -1108,9 +1147,6 @@ const CreateTask = () => {
                 </AlertDialogTrigger>
                 <AlertDialogContent className="rounded-2xl border-none shadow-2xl">
                   <AlertDialogHeader>
-                    <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-4">
-                      <Plus className="h-6 w-6 text-blue-600 rotate-45" />
-                    </div>
                     <AlertDialogTitle className="text-xl">发布任务确认</AlertDialogTitle>
                     <AlertDialogDescription className="text-base text-muted-foreground">
                       确认正式发布任务「{title}」吗？<br />

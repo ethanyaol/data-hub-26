@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { provinces } from "../../pages/mobile-users/locations";
 import Cascader from "@/components/ui/cascader";
+import { Info } from "lucide-react";
 
 interface EditRecorderDialogProps {
   open: boolean;
@@ -26,7 +27,8 @@ interface EditRecorderDialogProps {
     contact: string;
     age: number;
     growthLocation: string;
-    createTime: string; // Added createTime
+    createTime: string;
+    isSyncRecorder?: boolean;
   } | null;
   onSave: (data: {
     nickname: string;
@@ -62,7 +64,7 @@ const EditRecorderDialog = ({
       } else {
         setNickname("");
         setGender("男");
-        setContact(loginPhone || "");
+        setContact("");
         setAge(18);
         setGrowthLocation("");
       }
@@ -120,7 +122,15 @@ const EditRecorderDialog = ({
                 onChange={(e) => setNickname(e.target.value)}
                 placeholder="请输入昵称"
                 maxLength={10}
+                disabled={recorder?.isSyncRecorder}
+                className={recorder?.isSyncRecorder ? "bg-muted cursor-not-allowed" : ""}
               />
+              {recorder?.isSyncRecorder && (
+                <p className="text-[10px] text-amber-600 flex items-center gap-1 mt-1">
+                  <Info className="h-3 w-3" />
+                  默认录音人昵称随用户姓名同步，不可在此修改
+                </p>
+              )}
             </div>
             {loginPhone && (
               <div className="space-y-2">

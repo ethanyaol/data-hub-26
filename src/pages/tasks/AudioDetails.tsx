@@ -18,7 +18,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { Search, ChevronLeft } from "lucide-react";
+import { DateRangePicker } from "@/components/DateRangePicker";
+import type { DateRange } from "react-day-picker";
+import { isWithinInterval, parse, startOfDay, endOfDay } from "date-fns";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -35,7 +38,8 @@ const AudioDetails = () => {
   const [filterSpeed, setFilterSpeed] = useState<string>("all");
   const [filterRecordingText, setFilterRecordingText] = useState("");
   const [filterAcceptanceStatus, setFilterAcceptanceStatus] = useState<string>("all");
-  const [filterCreateTime, setFilterCreateTime] = useState("");
+  const [filterTextMatchConsistent, setFilterTextMatchConsistent] = useState<string>("all");
+  const [filterUpdateTime, setFilterUpdateTime] = useState<DateRange | undefined>(undefined);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -55,9 +59,19 @@ const AudioDetails = () => {
     if (filterSpeed !== "all" && record.speed !== filterSpeed) return false;
     if (filterRecordingText && !record.recordingText.includes(filterRecordingText)) return false;
     if (filterAcceptanceStatus !== "all" && record.acceptanceStatus !== filterAcceptanceStatus) return false;
-    if (filterCreateTime && !record.createTime.includes(filterCreateTime)) return false;
+    if (filterTextMatchConsistent !== "all") {
+      const isConsistent = filterTextMatchConsistent === "yes";
+      if (record.textMatchConsistent !== isConsistent) return false;
+    }
+    if (filterUpdateTime?.from && filterUpdateTime?.to) {
+      const recordDate = parse(record.updateTime, "yyyy/MM/dd HH:mm:ss", new Date());
+      if (!isWithinInterval(recordDate, {
+        start: startOfDay(filterUpdateTime.from),
+        end: endOfDay(filterUpdateTime.to)
+      })) return false;
+    }
     return true;
-  });
+  }).sort((a, b) => b.updateTime.localeCompare(a.updateTime));
 
   const totalCount = filteredRecords.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
@@ -71,7 +85,8 @@ const AudioDetails = () => {
     setFilterSpeed("all");
     setFilterRecordingText("");
     setFilterAcceptanceStatus("all");
-    setFilterCreateTime("");
+    setFilterTextMatchConsistent("all");
+    setFilterUpdateTime(undefined);
     setCurrentPage(1);
   };
 
@@ -79,11 +94,19 @@ const AudioDetails = () => {
     setCurrentPage(1);
   };
 
+  // Selection helpers
+  const isRecordSelectable = (record: AudioDetailRecord) => {
+    const restricted = ["已废弃", "已通过", "已打回", "待上传"];
+    return !restricted.includes(record.acceptanceStatus);
+  };
+
   // Selection handlers
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      const allKeys = new Set(paginatedRecords.map((r) => r.audioRowkey));
-      setSelectedRows(allKeys);
+      const selectableKeys = paginatedRecords
+        .filter(isRecordSelectable)
+        .map((r) => r.audioRowkey);
+      setSelectedRows(new Set(selectableKeys));
     } else {
       setSelectedRows(new Set());
     }
@@ -99,9 +122,10 @@ const AudioDetails = () => {
     setSelectedRows(next);
   };
 
+  const selectableRowsOnPage = paginatedRecords.filter(isRecordSelectable);
   const isAllSelected =
-    paginatedRecords.length > 0 &&
-    paginatedRecords.every((r) => selectedRows.has(r.audioRowkey));
+    selectableRowsOnPage.length > 0 &&
+    selectableRowsOnPage.every((r) => selectedRows.has(r.audioRowkey));
 
   // Batch actions
   const handleBatchRejectConfirm = (remark: string) => {
@@ -122,15 +146,31 @@ const AudioDetails = () => {
     setAudioPlayerOpen(true);
   };
 
+  // Handle share audio link
+  const handleShare = (rowkey: string) => {
+    if (!rowkey) {
+      toast.error("无可用的音频 Rowkey");
+      return;
+    }
+    const shareUrl = `${window.location.origin}/share/audio/${rowkey}`;
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      toast.success("音频分享链接已复制到剪贴板，可供互联网用户试听");
+    }).catch(() => {
+      // Fallback for older browsers or if clipboard fails
+      toast.error("复制失败，请手动记录 Rowkey");
+    });
+  };
+
   // Acceptance status badge renderer
   const renderAcceptanceStatus = (status: AudioDetailRecord["acceptanceStatus"]) => {
     switch (status) {
-      case "待验收":
+      case "待上传":
         return (
-          <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
-            待验收
+          <span className="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-500 border border-slate-200">
+            待上传
           </span>
         );
+      case "待验收":
       case "已通过":
         return (
           <span className="px-2 py-0.5 rounded text-xs bg-green-100 text-green-700">
@@ -189,26 +229,40 @@ const AudioDetails = () => {
             任务管理
           </button>
           <span>/</span>
-          <span>...</span>
+          <button
+            className="hover:text-foreground"
+            onClick={() => navigate(-1)}
+          >
+            人员采集计划
+          </button>
           <span>/</span>
           <span className="text-foreground">音频详情</span>
         </div>
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-foreground">音频详情</h1>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate(-1)}
+              className="p-1 hover:bg-accent rounded-md transition-colors"
+              title="返回上级页面"
+            >
+              <ChevronLeft className="h-6 w-6 text-muted-foreground" />
+            </button>
+            <h1 className="text-xl font-semibold text-foreground">音频详情</h1>
+          </div>
           <div className="flex items-center gap-2">
             <Button
               size="sm"
               disabled={selectedRows.size === 0}
               onClick={() => setBatchRejectOpen(true)}
             >
-              批量确认打回
+              批量打回
             </Button>
             <Button
               size="sm"
               disabled={selectedRows.size === 0}
               onClick={() => setBatchPassConfirmOpen(true)}
             >
-              批量确认通过
+              批量通过
             </Button>
           </div>
         </div>
@@ -266,12 +320,23 @@ const AudioDetails = () => {
             </select>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-sm text-muted-foreground whitespace-nowrap">创建时间</span>
-            <Input
-              value={filterCreateTime}
-              onChange={(e) => setFilterCreateTime(e.target.value)}
-              placeholder="请输入创建时间"
-              className="w-40 h-9"
+            <span className="text-sm text-muted-foreground whitespace-nowrap">文本识别一致</span>
+            <select
+              value={filterTextMatchConsistent}
+              onChange={(e) => setFilterTextMatchConsistent(e.target.value)}
+              className="flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="all">全部</option>
+              <option value="yes">是</option>
+              <option value="no">否</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm text-muted-foreground whitespace-nowrap">更新时间</span>
+            <DateRangePicker
+              dateRange={filterUpdateTime}
+              onSelect={setFilterUpdateTime}
+              className="w-64"
             />
           </div>
           <Button variant="outline" size="sm" onClick={handleReset}>
@@ -302,10 +367,12 @@ const AudioDetails = () => {
                 <th>语言</th>
                 <th>语速</th>
                 <th>录制文本</th>
+                <th>识别结果</th>
+                <th className="whitespace-nowrap">文本识别一致</th>
                 <th>音频格式</th>
                 <th>验收情况</th>
                 <th>备注</th>
-                <th>创建时间</th>
+                <th>更新时间</th>
                 <th className="min-w-[180px]">操作</th>
               </tr>
             </thead>
@@ -326,43 +393,50 @@ const AudioDetails = () => {
                       <td className="text-center">
                         <input
                           type="checkbox"
-                          className="accent-primary"
+                          className="accent-primary disabled:opacity-30 disabled:cursor-not-allowed"
                           checked={selectedRows.has(record.audioRowkey)}
+                          disabled={!isRecordSelectable(record)}
                           onChange={(e) =>
                             handleSelectRow(record.audioRowkey, e.target.checked)
                           }
                         />
                       </td>
                       <td>{record.termIndex}</td>
-                      <td>{record.audioRowkey}</td>
+                      <td>
+                        {record.acceptanceStatus === "待上传" || record.acceptanceStatus === "已废弃"
+                          ? "-"
+                          : record.audioRowkey}
+                      </td>
                       <td>{record.language}</td>
                       <td>{record.speed}</td>
                       <td>{record.recordingText}</td>
+                      <td className="max-w-[150px] truncate" title={record.recognitionResult || "-"}>
+                        {record.recognitionResult || "-"}
+                      </td>
+                      <td>
+                        {record.acceptanceStatus === "待上传" ? "-" : (record.textMatchConsistent ? "是" : "否")}
+                      </td>
                       <td>{record.audioFormat}</td>
                       <td>{renderAcceptanceStatus(record.acceptanceStatus)}</td>
                       <td>{record.remark || "-"}</td>
-                      <td>{record.createTime}</td>
+                      <td>{record.updateTime}</td>
                       <td>
-                        <div className="flex items-center flex-wrap">
-                          <button
-                            className="text-xs text-primary hover:text-primary/80 mr-2"
-                            onClick={() => handleOpenPlayer(globalIdx)}
-                          >
-                            试听
-                          </button>
-                          <button
-                            className="text-xs text-primary hover:text-primary/80 mr-2"
-                            onClick={() => toast.info("链接已复制")}
-                          >
-                            分享
-                          </button>
-                          <button
-                            className="text-xs text-primary hover:text-primary/80"
-                            onClick={() => toast.info("已暂时隐藏")}
-                          >
-                            暂时隐藏
-                          </button>
-                        </div>
+                        {!(record.acceptanceStatus === "待上传" || record.acceptanceStatus === "已废弃") && (
+                          <div className="flex items-center flex-wrap">
+                            <button
+                              className="text-xs text-primary hover:text-primary/80 mr-2"
+                              onClick={() => handleOpenPlayer(globalIdx)}
+                            >
+                              试听
+                            </button>
+                            <button
+                              className="text-xs text-primary hover:text-primary/80 mr-2"
+                              onClick={() => handleShare(record.audioRowkey)}
+                            >
+                              分享
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
@@ -396,11 +470,10 @@ const AudioDetails = () => {
               <button
                 key={p}
                 onClick={() => setCurrentPage(p)}
-                className={`px-2.5 py-1 border rounded text-xs ${
-                  currentPage === p
-                    ? "border-primary text-primary bg-primary/5"
-                    : "border-border hover:bg-muted"
-                }`}
+                className={`px-2.5 py-1 border rounded text-xs ${currentPage === p
+                  ? "border-primary text-primary bg-primary/5"
+                  : "border-border hover:bg-muted"
+                  }`}
               >
                 {p}
               </button>
@@ -427,7 +500,7 @@ const AudioDetails = () => {
       <AlertDialog open={batchPassConfirmOpen} onOpenChange={setBatchPassConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>批量确认通过</AlertDialogTitle>
+            <AlertDialogTitle>批量通过</AlertDialogTitle>
             <AlertDialogDescription>
               确认将选中的 {selectedRows.size} 条音频标记为通过？
             </AlertDialogDescription>

@@ -11,13 +11,26 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { USER_ROLES, USER_STATUSES } from "@/pages/mobile-users/types";
+import Cascader from "@/components/ui/cascader";
+import { Info } from "lucide-react";
 
 interface EditMobileUserDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: "add" | "edit";
   user?: { name: string; loginPhone: string; role: string; status: string } | null;
-  onSave: (data: { name: string; loginPhone: string; role: string; status: string }) => void;
+  onSave: (data: { 
+    name: string; 
+    loginPhone: string; 
+    role: string; 
+    status: string;
+    recorder?: {
+      gender: string;
+      age: number;
+      contact: string;
+      growthLocation: string;
+    }
+  }) => void;
 }
 
 const EditMobileUserDialog = ({
@@ -31,6 +44,12 @@ const EditMobileUserDialog = ({
   const [loginPhone, setLoginPhone] = useState("");
   const [role, setRole] = useState("用户");
   const [status, setStatus] = useState("启用");
+  
+  // 录音人相关字段 (仅新增时使用)
+  const [recorderGender, setRecorderGender] = useState("男");
+  const [recorderAge, setRecorderAge] = useState<number>(18);
+  const [recorderContact, setRecorderContact] = useState("");
+  const [recorderLocation, setRecorderLocation] = useState("");
 
   useEffect(() => {
     if (open) {
@@ -44,6 +63,10 @@ const EditMobileUserDialog = ({
         setLoginPhone("");
         setRole("用户");
         setStatus("启用");
+        setRecorderGender("男");
+        setRecorderAge(18);
+        setRecorderContact("");
+        setRecorderLocation("");
       }
     }
   }, [open, mode, user]);
@@ -83,11 +106,28 @@ const EditMobileUserDialog = ({
       }
     }
 
+    if (mode === "add") {
+      if (!recorderAge || recorderAge < 14) {
+        toast.error("录音人最小年龄为 14 岁");
+        return;
+      }
+      if (!recorderLocation) {
+        toast.error("请选择录音人成长地");
+        return;
+      }
+    }
+
     onSave({ 
       name: nameTrimmed, 
       loginPhone: loginPhone.trim(), 
       role, 
-      status 
+      status,
+      recorder: mode === "add" ? {
+        gender: recorderGender,
+        age: recorderAge,
+        contact: recorderContact.trim() || loginPhone.trim(), // 默认使用登录手机号
+        growthLocation: recorderLocation,
+      } : undefined
     });
     onOpenChange(false);
   };
@@ -123,7 +163,57 @@ const EditMobileUserDialog = ({
               onChange={(e) => setName(e.target.value)}
               placeholder="请输入姓名"
             />
+            {mode === "edit" && user?.name !== name.trim() && (
+              <p className="text-[10px] text-amber-600 flex items-center gap-1 mt-1">
+                <Info className="h-3 w-3" />
+                修改姓名将同步更新关联录音人的昵称
+              </p>
+            )}
           </div>
+          
+          {mode === "add" && (
+            <div className="border-t border-border pt-4 mt-2 space-y-4">
+              <h3 className="text-sm font-medium text-foreground">录音人信息 (同步创建)</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>录音人性别</Label>
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    value={recorderGender}
+                    onChange={(e) => setRecorderGender(e.target.value)}
+                  >
+                    <option value="男">男</option>
+                    <option value="女">女</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>录音人年龄 <span className="text-destructive">*</span></Label>
+                  <Input
+                    type="number"
+                    value={recorderAge || ""}
+                    onChange={(e) => setRecorderAge(Number(e.target.value))}
+                    min={14}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>联系方式</Label>
+                  <Input
+                    value={recorderContact}
+                    onChange={(e) => setRecorderContact(e.target.value)}
+                    placeholder="不填默认同手机号"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>成长地 <span className="text-destructive">*</span></Label>
+                  <Cascader
+                    value={recorderLocation}
+                    onValueChange={setRecorderLocation}
+                    placeholder="选择成长地"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
           <div className="space-y-2">
             <Label>
               角色 <span className="text-destructive">*</span>

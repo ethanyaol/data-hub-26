@@ -4,6 +4,7 @@ import { Plus, Search, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { mockRecorders, mockMobileUsers } from "./mockData";
+import { STORAGE_KEYS, getStorageData, setStorageData } from "@/utils/storage";
 import { provinces } from "./locations";
 import type { RecorderRecord } from "./types";
 import EditRecorderDialog from "@/components/mobile-users/EditRecorderDialog";
@@ -31,7 +32,9 @@ import {
 const RecorderManagement = () => {
   const navigate = useNavigate();
   const { userId } = useParams();
-  const [recorders, setRecorders] = useState<RecorderRecord[]>(mockRecorders);
+  const [recorders, setRecorders] = useState<RecorderRecord[]>(() => 
+    getStorageData(STORAGE_KEYS.RECORDERS, mockRecorders)
+  );
   const totalCount = 100; // 模拟总数
 
   // 获取父级用户手机号
@@ -60,7 +63,8 @@ const RecorderManagement = () => {
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [pageSize, setPageSize] = useState(10);
+  const [goToPage, setGoToPage] = useState("");
 
   // Dialog
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -75,6 +79,7 @@ const RecorderManagement = () => {
   }>({ open: false, recorder: null });
 
   const filteredRecorders = recorders.filter((r) => {
+    if (r.userId !== userId) return false; // 必须匹配当前用户 ID
     if (filterNickname && !r.nickname.includes(filterNickname)) return false;
     if (filterId && !r.id.toLowerCase().includes(filterId.toLowerCase()))
       return false;
@@ -84,10 +89,10 @@ const RecorderManagement = () => {
     return true;
   });
 
-  const totalPages = Math.ceil(filteredRecorders.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredRecorders.length / pageSize);
   const paginatedRecorders = filteredRecorders.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
   );
 
   const handleReset = () => {
@@ -106,6 +111,37 @@ const RecorderManagement = () => {
       return;
     }
     setCurrentPage(1);
+  };
+
+  const getPageNumbers = () => {
+    const pages: (number | "ellipsis")[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 4) pages.push("ellipsis");
+
+      const start = Math.max(2, currentPage - 2);
+      const end = Math.min(totalPages - 1, currentPage + 2);
+
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+
+      if (currentPage < totalPages - 3) pages.push("ellipsis");
+      pages.push(totalPages);
+    }
+    return pages;
+  };
+
+  const handleGoToPage = () => {
+    const pageNum = parseInt(goToPage);
+    if (pageNum && pageNum >= 1 && pageNum <= totalPages) {
+      setCurrentPage(pageNum);
+      setGoToPage("");
+    } else {
+      toast.error(`请输入 1 到 ${totalPages} 之间的页码`);
+    }
   };
 
   const handleAgeBlur = () => {
@@ -139,34 +175,32 @@ const RecorderManagement = () => {
     if (editDialogMode === "add") {
       const newRecorder: RecorderRecord = {
         id: `rec-${Date.now()}`,
+        userId: userId || "",
         nickname: data.nickname,
         gender: data.gender,
         age: data.age,
         contact: data.contact,
         growthLocation: data.growthLocation,
         createTime: new Date().toLocaleString("zh-CN").replace(/\//g, "/"),
+        isSyncRecorder: false,
       };
-      setRecorders((prev) => [newRecorder, ...prev]);
+      const updatedRecorders = [newRecorder, ...recorders];
+      setRecorders(updatedRecorders);
+      setStorageData(STORAGE_KEYS.RECORDERS, updatedRecorders);
       toast.success("录音人添加成功");
     } else if (editingRecorder) {
-      setRecorders((prev) =>
-        prev.map((r) =>
-          r.id === editingRecorder.id ? { ...r, ...data } : r
-        )
+      const updatedRecorders = recorders.map((r) =>
+        r.id === editingRecorder.id ? { ...r, ...data } : r
       );
+      setRecorders(updatedRecorders);
+      setStorageData(STORAGE_KEYS.RECORDERS, updatedRecorders);
       toast.success("录音人信息已更新");
     }
   };
 
   const handleDeleteRecorder = (recorder: RecorderRecord) => {
-    if (recorders.length <= 1) {
-      toast.error("必须保留至少一个录音人，不可全部删除");
-      return;
-    }
-    // Assuming the first recorder is a special one that cannot be deleted
-    // This logic might need adjustment based on actual requirements
-    if (recorder.id === recorders[0].id) {
-      toast.error("第一个录音人不可删除");
+    if (recorder.isSyncRecorder) {
+      toast.error("默认同步录音人不可删除");
       return;
     }
     setDeleteDialog({ open: true, recorder });
@@ -174,9 +208,9 @@ const RecorderManagement = () => {
 
   const confirmDelete = () => {
     if (deleteDialog.recorder) {
-      setRecorders((prev) =>
-        prev.filter((r) => r.id !== deleteDialog.recorder!.id)
-      );
+      const updatedRecorders = recorders.filter((r) => r.id !== deleteDialog.recorder!.id);
+      setRecorders(updatedRecorders);
+      setStorageData(STORAGE_KEYS.RECORDERS, updatedRecorders);
       toast.success("录音人已删除");
     }
     setDeleteDialog({ open: false, recorder: null });
@@ -318,7 +352,7 @@ const RecorderManagement = () => {
                 paginatedRecorders.map((recorder, index) => (
                   <tr key={recorder.id}>
                     <td>
-                      {totalCount - ((currentPage - 1) * itemsPerPage + index)}
+                      {totalCount - ((currentPage - 1) * pageSize + index)}
                     </td>
                     <td>{maskPhone(loginPhone)}</td>
                     <td>{recorder.nickname}</td>
@@ -352,49 +386,66 @@ const RecorderManagement = () => {
           </table>
         </div>
 
-        {/* Pagination */}
+        {/* 分页控制 */}
         {filteredRecorders.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-            <span className="text-sm text-muted-foreground">
-              展示 {(currentPage - 1) * itemsPerPage + 1} 到{" "}
-              {Math.min(
-                currentPage * itemsPerPage,
-                filteredRecorders.length
-              )}
-              ，共 {filteredRecorders.length} 条数据
-            </span>
-            <div className="flex items-center gap-1">
+          <div className="flex items-center justify-end gap-3 text-sm text-muted-foreground px-4 py-3 border-t border-border">
+            <span>共 {filteredRecorders.length} 条</span>
+            <select
+              className="h-7 px-2 text-xs border border-border rounded bg-background cursor-pointer hover:border-primary/50 transition-colors focus:outline-none focus:ring-1 focus:ring-primary"
+              value={pageSize}
+              onChange={(e) => {
+                const newSize = Number(e.target.value);
+                setPageSize(newSize);
+                setCurrentPage(1);
+              }}
+            >
+              <option value={10}>10条/页</option>
+              <option value={20}>20条/页</option>
+              <option value={50}>50条/页</option>
+            </select>
+            <div className="flex items-center gap-0.5">
               <button
-                className="px-3 py-1 text-sm border border-input rounded hover:bg-accent disabled:opacity-50"
+                disabled={currentPage <= 1}
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
+                className="w-7 h-7 flex items-center justify-center border border-border rounded text-xs hover:bg-accent disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
               >
-                上一页
+                &lt;
               </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                (page) => (
+              {getPageNumbers().map((p, idx) =>
+                p === "ellipsis" ? (
+                  <span key={`e-${idx}`} className="w-7 h-7 flex items-center justify-center text-xs">
+                    ...
+                  </span>
+                ) : (
                   <button
-                    key={page}
-                    className={`px-3 py-1 text-sm border rounded ${
-                      page === currentPage
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "border-input hover:bg-accent"
-                    }`}
-                    onClick={() => setCurrentPage(page)}
+                    key={p}
+                    onClick={() => setCurrentPage(p)}
+                    className={`w-7 h-7 flex items-center justify-center rounded text-xs cursor-pointer ${currentPage === p
+                      ? "bg-primary text-primary-foreground font-medium"
+                      : "border border-border hover:bg-accent"
+                      }`}
                   >
-                    {page}
+                    {p}
                   </button>
                 )
               )}
               <button
-                className="px-3 py-1 text-sm border border-input rounded hover:bg-accent disabled:opacity-50"
-                onClick={() =>
-                  setCurrentPage((p) => Math.min(totalPages, p + 1))
-                }
-                disabled={currentPage === totalPages}
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                className="w-7 h-7 flex items-center justify-center border border-border rounded text-xs hover:bg-accent disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
               >
-                下一页
+                &gt;
               </button>
+            </div>
+            <div className="flex items-center gap-1">
+              <span>前往</span>
+              <input
+                className="w-10 h-7 px-1 text-xs text-center border border-border rounded bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                value={goToPage}
+                onChange={(e) => setGoToPage(e.target.value.replace(/\D/g, ""))}
+                onKeyDown={(e) => e.key === "Enter" && handleGoToPage()}
+              />
+              <span>页</span>
             </div>
           </div>
         )}
@@ -415,6 +466,7 @@ const RecorderManagement = () => {
                 age: editingRecorder.age,
                 growthLocation: editingRecorder.growthLocation,
                 createTime: editingRecorder.createTime,
+                isSyncRecorder: editingRecorder.isSyncRecorder,
               }
             : null
         }

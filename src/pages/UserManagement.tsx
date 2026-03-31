@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { ResetPasswordConfirmDialog } from "@/components/ResetPasswordConfirmDialog";
+import ResetPasswordDialog from "@/components/ResetPasswordDialog";
+import { STORAGE_KEYS, getStorageData, setStorageData } from "@/utils/storage";
 
 interface UserRecord {
   id: number;
@@ -36,17 +37,53 @@ const UserManagement = () => {
   const [searchName, setSearchName] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const totalPages = 39;
+  const [pageSize, setPageSize] = useState(10);
+  const [goToPage, setGoToPage] = useState("");
   const totalUsers = 390;
+  const totalPages = Math.ceil(totalUsers / pageSize);
 
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
+  const [users, setUsers] = useState<UserRecord[]>(() => 
+    getStorageData(STORAGE_KEYS.USERS, mockUsers)
+  );
 
-  const filteredUsers = mockUsers.filter((u) => {
+  const filteredUsers = users.filter((u) => {
     if (searchName && !u.loginName.includes(searchName) && !u.realName.includes(searchName)) return false;
     if (statusFilter !== "all" && u.status !== statusFilter) return false;
     return true;
   });
+
+  const getPageNumbers = () => {
+    const pages: (number | "ellipsis")[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 4) pages.push("ellipsis");
+
+      const start = Math.max(2, currentPage - 2);
+      const end = Math.min(totalPages - 1, currentPage + 2);
+
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+
+      if (currentPage < totalPages - 3) pages.push("ellipsis");
+      pages.push(totalPages);
+    }
+    return pages;
+  };
+
+  const handleGoToPage = () => {
+    const pageNum = parseInt(goToPage);
+    if (pageNum && pageNum >= 1 && pageNum <= totalPages) {
+      setCurrentPage(pageNum);
+      setGoToPage("");
+    } else {
+      toast.error(`请输入 1 到 ${totalPages} 之间的页码`);
+    }
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -172,53 +209,82 @@ const UserManagement = () => {
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-end gap-2 text-sm text-muted-foreground">
-        <span>共{totalUsers}条记录</span>
-        <span>第 {currentPage}/{totalPages}</span>
-        <div className="flex items-center gap-1">
+      {/* 分页控制 */}
+      <div className="flex items-center justify-end gap-3 text-sm text-muted-foreground">
+        <span>共 {totalUsers} 条</span>
+        <select
+          className="h-7 px-2 text-xs border border-border rounded bg-background cursor-pointer hover:border-primary/50 transition-colors focus:outline-none focus:ring-1 focus:ring-primary"
+          value={pageSize}
+          onChange={(e) => {
+            const newSize = Number(e.target.value);
+            setPageSize(newSize);
+            setCurrentPage(1);
+          }}
+        >
+          <option value={10}>10条/页</option>
+          <option value={20}>20条/页</option>
+          <option value={50}>50条/页</option>
+        </select>
+        <div className="flex items-center gap-0.5">
           <button
             disabled={currentPage <= 1}
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            className="px-2 py-1 border border-border rounded text-xs hover:bg-muted disabled:opacity-50"
+            className="w-7 h-7 flex items-center justify-center border border-border rounded text-xs hover:bg-accent disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
           >
             &lt;
           </button>
-          {[1, 2, 3].map((p) => (
-            <button
-              key={p}
-              onClick={() => setCurrentPage(p)}
-              className={`px-2.5 py-1 border rounded text-xs ${currentPage === p
-                ? "border-primary text-primary bg-primary/5"
-                : "border-border hover:bg-muted"
-                }`}
-            >
-              {p}
-            </button>
-          ))}
-          <span className="px-1">...</span>
-          <button
-            onClick={() => setCurrentPage(totalPages)}
-            className={`px-2.5 py-1 border rounded text-xs ${currentPage === totalPages
-              ? "border-primary text-primary bg-primary/5"
-              : "border-border hover:bg-muted"
-              }`}
-          >
-            {totalPages}
-          </button>
+          {getPageNumbers().map((p, idx) =>
+            p === "ellipsis" ? (
+              <span key={`e-${idx}`} className="w-7 h-7 flex items-center justify-center text-xs">
+                ...
+              </span>
+            ) : (
+              <button
+                key={p}
+                onClick={() => setCurrentPage(p)}
+                className={`w-7 h-7 flex items-center justify-center rounded text-xs cursor-pointer ${currentPage === p
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border hover:bg-accent"
+                  }`}
+              >
+                {p}
+              </button>
+            )
+          )}
           <button
             disabled={currentPage >= totalPages}
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            className="px-2 py-1 border border-border rounded text-xs hover:bg-muted disabled:opacity-50"
+            className="w-7 h-7 flex items-center justify-center border border-border rounded text-xs hover:bg-accent disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
           >
             &gt;
           </button>
         </div>
+        <div className="flex items-center gap-1">
+          <span>前往</span>
+          <input
+            className="w-10 h-7 px-1 text-xs text-center border border-border rounded bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+            value={goToPage}
+            onChange={(e) => setGoToPage(e.target.value.replace(/\D/g, ""))}
+            onKeyDown={(e) => e.key === "Enter" && handleGoToPage()}
+          />
+          <span>页</span>
+        </div>
       </div>
 
-      <ResetPasswordConfirmDialog
+      <ResetPasswordDialog
         open={resetModalOpen}
         onOpenChange={setResetModalOpen}
         user={selectedUser}
+        onConfirm={(newPassword) => {
+          if (selectedUser) {
+            const updatedUsers = users.map((u) => 
+               u.id === selectedUser.id ? { ...u, isDefaultPassword: false } : u
+            );
+            setUsers(updatedUsers);
+            setStorageData(STORAGE_KEYS.USERS, updatedUsers);
+            toast.success(`用户 ${selectedUser.realName} 的密码已重置成功`);
+          }
+        }}
       />
     </div>
   );
