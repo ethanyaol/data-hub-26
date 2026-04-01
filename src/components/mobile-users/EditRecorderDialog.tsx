@@ -103,6 +103,12 @@ const EditRecorderDialog = ({
     onOpenChange(false);
   };
 
+  // 脱敏辅助函数
+  const maskPhone = (phone: string) => {
+    if (!phone || phone === "-") return "-";
+    return phone.replace(/^(\d{3})\d{4}(\d{4})$/, "$1****$2");
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -135,7 +141,7 @@ const EditRecorderDialog = ({
             {loginPhone && (
               <div className="space-y-2">
                 <Label>登录手机号</Label>
-                <Input value={loginPhone} disabled />
+                <Input value={maskPhone(loginPhone)} disabled />
               </div>
             )}
             <div className="space-y-2">

@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus, Search, RotateCcw, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { mockAgentRecovery } from "./mockData";
 import type { AgentRecoveryRecord } from "./types";
+import { STORAGE_KEYS, getStorageData, setStorageData } from "@/utils/storage";
 import TaskAllocationDialog from "@/components/tasks/TaskAllocationDialog";
 import PersonnelAssignDialog from "@/components/tasks/PersonnelAssignDialog";
 import ShareWarningDialog from "@/components/tasks/ShareWarningDialog";
@@ -25,6 +26,14 @@ const ITEMS_PER_PAGE = 10;
 const TaskRecoveryAgent = () => {
   const navigate = useNavigate();
   const { taskId } = useParams<{ taskId: string }>();
+  const isAgentMode = true;
+
+  // 数据状态（持久化）
+  const [agentRecords, setAgentRecords] = useState<AgentRecoveryRecord[]>(() => {
+    const allRecords = getStorageData(STORAGE_KEYS.AGENT_RECOVERY, mockAgentRecovery);
+    // 过滤属于当前任务的分配记录
+    return allRecords.filter(r => r.taskId === taskId);
+  });
 
   // Filter states
   const [filterAgentName, setFilterAgentName] = useState("");
@@ -35,7 +44,6 @@ const TaskRecoveryAgent = () => {
 
   // Dialog states
   const [allocationDialogOpen, setAllocationDialogOpen] = useState(false);
-  const [personnelDialogOpen, setPersonnelDialogOpen] = useState(false);
   const [warningDialogOpen, setWarningDialogOpen] = useState(false);
   const [endTaskConfirmOpen, setEndTaskConfirmOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<AgentRecoveryRecord | null>(null);
@@ -46,8 +54,23 @@ const TaskRecoveryAgent = () => {
   const [pageSize, setPageSize] = useState(10);
   const [goToPage, setGoToPage] = useState("");
 
+  // Statistics calculation
+  const summaries = useMemo(() => {
+    return agentRecords.reduce((acc, curr) => {
+      acc.totalEstCount += curr.estimatedAudioCount;
+      acc.totalCollCount += curr.collectedAudioCount;
+      acc.totalAccTerms += parseInt(curr.completedAcceptanceTerms) || 0;
+      
+      const [m, f] = curr.genderRatio.split(/[：:]/).map(v => parseInt(v) || 0);
+      acc.totalGenderM += m;
+      acc.totalGenderF += f;
+      
+      return acc;
+    }, { totalEstCount: 0, totalCollCount: 0, totalAccTerms: 0, totalGenderM: 0, totalGenderF: 0 });
+  }, [agentRecords]);
+
   // Filtering logic
-  const filteredRecords = mockAgentRecovery.filter((record) => {
+  const filteredRecords = agentRecords.filter((record) => {
     if (filterAgentName && !record.agentName.includes(filterAgentName)) return false;
     if (filterAgentCode && !record.agentCode.includes(filterAgentCode)) return false;
     if (filterCollectionCode && !record.collectionCode.includes(filterCollectionCode)) return false;
@@ -77,7 +100,7 @@ const TaskRecoveryAgent = () => {
   };
 
   const renderStatus = (status: AgentRecoveryRecord["status"]) => {
-    const dotColor = status === "已回收" ? "bg-green-500" : "bg-orange-500";
+    const dotColor = status === "已完成" ? "bg-green-500" : "bg-orange-500";
     return (
       <span className="inline-flex items-center gap-1.5 text-sm">
         <span className={`inline-block w-2 h-2 rounded-full ${dotColor}`} />
@@ -113,7 +136,13 @@ const TaskRecoveryAgent = () => {
 
   const confirmEndTask = () => {
     if (recordToEnd) {
-      toast.success(`代理「${recordToEnd.agentName}」的任务已结束`);
+      const updatedRecords = agentRecords.map(r => 
+        r.agentCode === recordToEnd.agentCode ? { ...r, status: "已完成" as const } : r
+      );
+      setAgentRecords(updatedRecords);
+      setStorageData(STORAGE_KEYS.AGENT_RECOVERY, updatedRecords);
+      
+      toast.success(`代理「${recordToEnd.agentName}」的任务已标记为完成`);
       setEndTaskConfirmOpen(false);
       setRecordToEnd(null);
     }
@@ -163,10 +192,10 @@ const TaskRecoveryAgent = () => {
             任务管理
           </button>
           <span>/</span>
-          <span className="text-foreground">任务回收详情</span>
+          <span className="text-foreground">任务分配详情</span>
         </div>
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-foreground">任务回收详情</h1>
+          <h1 className="text-xl font-semibold text-foreground">任务分配详情</h1>
           <Button size="sm" onClick={handleNewAllocation}>
             <Plus className="h-4 w-4 mr-1" /> 新增任务分配
           </Button>
@@ -221,8 +250,8 @@ const TaskRecoveryAgent = () => {
                 className="flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 <option value="all">全部</option>
-                <option value="未回收">未回收</option>
-                <option value="已回收">已回收</option>
+                <option value="进行中">进行中</option>
+                <option value="已完成">已完成</option>
               </select>
             </div>
           </div>
@@ -252,19 +281,19 @@ const TaskRecoveryAgent = () => {
         <div className="flex items-center gap-8 flex-wrap">
           <div className="flex items-center gap-1.5">
             <span className="text-sm text-muted-foreground">总预计收集份数</span>
-            <span className="text-sm font-semibold text-foreground">200</span>
+            <span className="text-sm font-semibold text-foreground">{summaries.totalEstCount}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-sm text-muted-foreground">已收集总份数</span>
-            <span className="text-sm font-semibold text-foreground">40</span>
+            <span className="text-sm font-semibold text-foreground">{summaries.totalCollCount}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-sm text-muted-foreground">男女比例</span>
-            <span className="text-sm font-semibold text-foreground">30:10</span>
+            <span className="text-sm font-semibold text-foreground">{summaries.totalGenderM}:{summaries.totalGenderF}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-sm text-muted-foreground">已完成验收</span>
-            <span className="text-sm font-semibold text-foreground">40/200</span>
+            <span className="text-sm text-muted-foreground">已完成验收条数</span>
+            <span className="text-sm font-semibold text-foreground">{summaries.totalAccTerms} 条</span>
           </div>
         </div>
       </div>
@@ -283,8 +312,9 @@ const TaskRecoveryAgent = () => {
                 <th>采集码</th>
                 <th>预计录制音频份数</th>
                 <th>已收集音频份数</th>
+                <th>预计录制音频条数</th>
+                <th>已收集音频条数</th>
                 <th>男女比例</th>
-                <th>已完成验收份数</th>
                 <th>已完成验收条数</th>
                 <th>状态</th>
                 <th>创建时间</th>
@@ -307,11 +337,12 @@ const TaskRecoveryAgent = () => {
                     <td>{record.agentName}</td>
                     <td>{record.agentCode}</td>
                     <td>{record.collectionCode}</td>
-                    <td>{record.estimatedAudioCount}</td>
-                    <td>{record.collectedAudioCount}</td>
-                    <td>{record.genderRatio}</td>
-                    <td>{record.completedAcceptanceCount}</td>
-                    <td>{record.completedAcceptanceTerms}</td>
+                    <td className="text-center">{record.estimatedAudioCount}</td>
+                    <td className="text-center">{record.collectedAudioCount}</td>
+                    <td className="text-center">{record.estimatedAudioTerms}</td>
+                    <td className="text-center">{record.collectedAudioTerms}</td>
+                    <td className="text-center">{record.genderRatio}</td>
+                    <td className="text-center">{record.completedAcceptanceTerms}</td>
                     <td>{renderStatus(record.status)}</td>
                     <td>{record.createTime}</td>
                     <td className="sticky right-0 !bg-card z-10 shadow-[-6px_0_6px_-3px_rgba(0,0,0,0.05)] border-l transition-colors group-hover:!bg-accent">
@@ -320,11 +351,11 @@ const TaskRecoveryAgent = () => {
                           className="text-xs text-primary hover:text-primary/80 mr-2"
                           onClick={() =>
                             navigate(
-                              `/dashboard/tasks/${taskId}/recovery/${encodeURIComponent(record.agentCode)}/personnel`
+                              `/dashboard/tasks/${taskId}/recovery/${encodeURIComponent(record.agentCode)}/execution`
                             )
                           }
                         >
-                          任务人员回收详情
+                          子任务执行详情
                         </button>
                         <button
                           className="text-xs text-primary hover:text-primary/80 mr-2"
@@ -332,24 +363,14 @@ const TaskRecoveryAgent = () => {
                         >
                           修改任务分配
                         </button>
-                        {record.status === "未回收" && (
+                        {record.status === "进行中" && (
                           <button
-                            className="text-xs text-destructive hover:text-destructive/80 mr-2"
+                            className="text-xs text-destructive hover:text-destructive/80"
                             onClick={() => handleEndTask(record)}
                           >
                             结束任务
                           </button>
                         )}
-                        <button
-                          className="text-xs text-primary hover:text-primary/80"
-                          onClick={() =>
-                            navigate(
-                              `/dashboard/tasks/${taskId}/recovery/${encodeURIComponent(record.agentCode)}/subtasks`
-                            )
-                          }
-                        >
-                          查看子任务
-                        </button>
                       </div>
                     </td>
                   </tr>
@@ -446,14 +467,14 @@ const TaskRecoveryAgent = () => {
         open={allocationDialogOpen}
         onOpenChange={setAllocationDialogOpen}
         mode="agent"
-        onOpenPersonnel={() => setPersonnelDialogOpen(true)}
+        editingRecord={editingRecord}
+        taskId={taskId}
+        onSuccess={() => {
+          const allRecords = getStorageData(STORAGE_KEYS.AGENT_RECOVERY, mockAgentRecovery);
+          setAgentRecords(allRecords.filter(r => r.taskId === taskId));
+        }}
       />
 
-      <PersonnelAssignDialog
-        open={personnelDialogOpen}
-        onOpenChange={setPersonnelDialogOpen}
-        onConfirm={() => toast.success("人员选人成功")}
-      />
 
       <ShareWarningDialog
         open={warningDialogOpen}

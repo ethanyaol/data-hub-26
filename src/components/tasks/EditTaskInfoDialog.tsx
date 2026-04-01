@@ -35,14 +35,14 @@ const EditTaskInfoDialog = ({
   const handleSave = () => {
     onSave(remark.trim());
     onOpenChange(false);
-    toast.success("任务信息修改成功");
+    toast.success("备注保存成功");
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>修改任务信息</DialogTitle>
+          <DialogTitle>添加备注</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">

@@ -23,13 +23,15 @@ export const LANGUAGES = [
 
 export const SPEEDS = ["超快语速", "快语速", "正常语速", "慢语速"] as const;
 
-export const TASK_STATUSES = ["进行中", "已结束", "已归档"] as const;
+export const TASK_STATUSES = ["草稿", "进行中", "已完成", "已归档"] as const;
 
 export const ACCEPTANCE_STATUSES = ["待上传", "待验收", "已通过", "已打回", "已补录", "已废弃"] as const;
 
 export const CLAIM_STATUSES = ["已领取", "未领取"] as const;
 
 export const RECOVERY_STATUSES = ["已回收", "未回收"] as const;
+
+export const ALLOCATION_STATUSES = ["进行中", "已完成"] as const;
 
 // ===== 类型 =====
 
@@ -45,9 +47,12 @@ export interface TaskRecord {
   isAgentMode: boolean;
   endTime: string;
   isPublished: boolean;
-  status: "进行中" | "已结束" | "已归档";
+  status: "草稿" | "进行中" | "已完成" | "已归档";
   createTime: string;
+  updateTime: string;
   tag?: string;
+  totalTerms?: number;      // 任务导入的总词条数量
+  termsPerPerson?: number;  // 定量录制下每个采集人可领取条数
 }
 
 export interface TaskTerm {
@@ -61,52 +66,52 @@ export interface TaskTerm {
 }
 
 export interface AgentRecoveryRecord {
+  taskId?: string; // 关联的任务 ID
   agentName: string;
   agentCode: string;
   collectionCode: string;
   estimatedAudioCount: number;
   collectedAudioCount: number;
+  estimatedAudioTerms: number;
+  collectedAudioTerms: number;
   genderRatio: string;
-  completedAcceptanceCount: string;
   completedAcceptanceTerms: string;
-  status: "已回收" | "未回收";
+  status: "进行中" | "已完成";
   createTime: string;
+  selectedPersonIds?: string[];
 }
 
 export interface NonAgentRecoveryRecord {
+  taskId?: string; // 关联的任务 ID
   planIndex: number;
   planName: string;
   estimatedAudioCount: number;
   collectedAudioCount: number;
+  estimatedAudioTerms: number;
+  collectedAudioTerms: number;
   genderRatio: string;
-  completedAcceptanceCount: string;
   completedAcceptanceTerms: string;
   createTime: string;
-  status: "已回收" | "未回收";
+  status: "进行中" | "已完成";
+  selectedPersonIds?: string[];
 }
 
-export interface SubtaskRecord {
-  subtaskIndex: number;
-  copyCount: number;
+export interface SubtaskExecutionRecord {
+  subtaskId: string;
   startIndex: number;
   endIndex: number;
   claimStatus: "已领取" | "未领取";
   recoveryStatus: "已回收" | "未回收";
-  availableTerms: string;
+  taskCount: number;
+  recorderName: string;
+  recorderId: string;
+  gender: "男" | "女" | "-";
+  taskRemark: string;
+  uploadedAudioCount: string;
+  passedTerms: string;
+  subtaskRemark: string;
   createTime: string;
-  assignedPerson: string;
-}
-
-export interface SubtaskNonAgentRecord {
-  subtaskIndex: number;
-  copySequence: number;
-  startIndex: number;
-  endIndex: number;
-  claimStatus: "已领取" | "未领取";
-  recoveryStatus: "已回收" | "未回收";
-  availableTerms: string;
-  createTime: string;
-  assignedPerson: string;
+  updateTime: string;
 }
 
 export interface PersonnelRecoveryRecord {

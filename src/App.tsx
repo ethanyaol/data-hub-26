@@ -18,9 +18,7 @@ import CreateTask from "./pages/tasks/CreateTask";
 import TaskDetail from "./pages/tasks/TaskDetail";
 import TaskRecoveryAgent from "./pages/tasks/TaskRecoveryAgent";
 import TaskRecoveryNonAgent from "./pages/tasks/TaskRecoveryNonAgent";
-import ViewSubtasksAgent from "./pages/tasks/ViewSubtasksAgent";
-import ViewSubtasksNonAgent from "./pages/tasks/ViewSubtasksNonAgent";
-import TaskPersonnelRecovery from "./pages/tasks/TaskPersonnelRecovery";
+import SubtaskExecutionDetails from "./pages/tasks/SubtaskExecutionDetails";
 import AudioDetails from "./pages/tasks/AudioDetails";
 import MobileUserList from "./pages/mobile-users/MobileUserList";
 import RecorderManagement from "./pages/mobile-users/RecorderManagement";
@@ -44,14 +42,13 @@ const App = () => (
             <Route path="user-management/detail/:id" element={<UserDetail />} />
             <Route path="tasks" element={<TaskList />} />
             <Route path="tasks/create" element={<CreateTask />} />
+            <Route path="tasks/edit/:taskId" element={<CreateTask />} />
             <Route path="tasks/:taskId/detail" element={<TaskDetail />} />
             <Route path="tasks/:taskId/recovery" element={<TaskRecoveryAgent />} />
             <Route path="tasks/:taskId/recovery-plan" element={<TaskRecoveryNonAgent />} />
-            <Route path="tasks/:taskId/recovery/:agentId/subtasks" element={<ViewSubtasksAgent />} />
-            <Route path="tasks/:taskId/recovery-plan/:planId/subtasks" element={<ViewSubtasksNonAgent />} />
-            <Route path="tasks/:taskId/recovery/:agentId/personnel" element={<TaskPersonnelRecovery />} />
-            <Route path="tasks/:taskId/recovery-plan/:planId/personnel" element={<TaskPersonnelRecovery />} />
-            <Route path="tasks/:taskId/recovery/:agentId/personnel/:personId/audio" element={<AudioDetails />} />
+            <Route path="tasks/:taskId/recovery/:agentId/execution" element={<SubtaskExecutionDetails />} />
+            <Route path="tasks/:taskId/recovery-plan/:planId/execution" element={<SubtaskExecutionDetails />} />
+            <Route path="tasks/:taskId/recovery/:agentId/execution/:personId/audio" element={<AudioDetails />} />
             <Route path="mobile-users" element={<MobileUserList />} />
             <Route path="mobile-users/:userId/recorders" element={<RecorderManagement />} />
           </Route>

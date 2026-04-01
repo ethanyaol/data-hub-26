@@ -2,13 +2,13 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Search, RefreshCw, ChevronDown, ChevronUp, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
-import { mockTasks } from "./mockData";
-import type { TaskRecord } from "./types";
+import { mockTasks, mockAgentRecovery, mockNonAgentRecovery } from "./mockData";
+import type { TaskRecord, AgentRecoveryRecord, NonAgentRecoveryRecord } from "./types";
 import { STORAGE_KEYS, getStorageData, setStorageData } from "@/utils/storage";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { Button } from "@/components/ui/button";
 import type { DateRange } from "react-day-picker";
-import { isWithinInterval, startOfDay, endOfDay, parse } from "date-fns";
+import { isWithinInterval, startOfDay, endOfDay, parse, isAfter } from "date-fns";
 import { ClearableSelect } from "@/components/ClearableSelect";
 import { MultiSelectFuzzySearch } from "@/components/MultiSelectFuzzySearch";
 import { X } from "lucide-react";
@@ -61,9 +61,15 @@ const TaskList = () => {
   const [pageSize, setPageSize] = useState(10);
 
   // 数据状态（持久化）
-  const [tasks, setTasks] = useState<TaskRecord[]>(() =>
-    getStorageData(STORAGE_KEYS.TASKS, mockTasks)
-  );
+  const [tasks, setTasks] = useState<TaskRecord[]>(() => {
+    const savedTasks = getStorageData(STORAGE_KEYS.TASKS, mockTasks);
+    // 强制迁移：解决缓存导致的“已结束”残留及缺少 updateTime 的问题
+    return savedTasks.map(t => ({
+      ...t,
+      status: (t.status as string) === "已结束" ? "已完成" as const : t.status,
+      updateTime: t.updateTime || t.createTime
+    }));
+  });
 
   // UI 状态
   const [expanded, setExpanded] = useState(true);
@@ -79,9 +85,29 @@ const TaskList = () => {
     onConfirm: () => void;
   }>({ open: false, title: "", description: "", onConfirm: () => { } });
 
+  // 核心业务逻辑：计算任务的有效状态
+  const processedTasks = useMemo(() => {
+    return tasks.map((task) => {
+      // 业务规则优先级最高：若未发布，则状态强制判定为“草稿”
+      if (!task.isPublished) {
+        return { ...task, status: "草稿" as const };
+      }
+
+      // 既有的状态纠偏：如果从缓存中读到了旧的“已结束”或当前已超时，均视为“已完成”
+      if ((task.status as string) === "已结束" || (task.status === "进行中" && isAfter(new Date(), parse(task.endTime, "yyyy/MM/dd HH:mm:ss", new Date())))) {
+        return { ...task, status: "已完成" as const };
+      }
+      return task;
+    }).sort((a, b) => {
+      const timeA = parse(a.updateTime || a.createTime, "yyyy/MM/dd HH:mm:ss", new Date()).getTime();
+      const timeB = parse(b.updateTime || b.createTime, "yyyy/MM/dd HH:mm:ss", new Date()).getTime();
+      return timeB - timeA;
+    });
+  }, [tasks]);
+
   // 筛选逻辑
   const filteredTasks = useMemo(() => {
-    return tasks.filter((task) => {
+    return processedTasks.filter((task) => {
       if (filterSearchTerm) {
         const term = filterSearchTerm.toLowerCase();
         if (!(task.id.toLowerCase().includes(term) || task.title.toLowerCase().includes(term))) return false;
@@ -106,7 +132,7 @@ const TaskList = () => {
       return true;
     });
   }, [
-    tasks,
+    processedTasks,
     filterSearchTerm,
     filterRecordingType,
     filterPurpose,
@@ -183,7 +209,7 @@ const TaskList = () => {
       title: "停用任务",
       description: `确定要停用任务「${task.title}」吗？`,
       onConfirm: () => {
-        const newTasks = tasks.map(t => t.id === task.id ? { ...t, status: "已结束" as const } : t);
+        const newTasks = tasks.map(t => t.id === task.id ? { ...t, status: "已完成" as const } : t);
         setTasks(newTasks);
         setStorageData(STORAGE_KEYS.TASKS, newTasks);
         toast.success(`任务「${task.title}」已停用`);
@@ -208,14 +234,36 @@ const TaskList = () => {
   };
 
   const handleArchiveTask = (task: TaskRecord) => {
+    // 检查是否存在“进行中”的子任务分配
+    const hasActiveAssignments = task.isAgentMode 
+      ? getStorageData<AgentRecoveryRecord[]>(STORAGE_KEYS.AGENT_RECOVERY, mockAgentRecovery).some(r => r.taskId === task.id && r.status === "进行中")
+      : getStorageData<NonAgentRecoveryRecord[]>(STORAGE_KEYS.NON_AGENT_RECOVERY, mockNonAgentRecovery).some(r => r.taskId === task.id && r.status === "进行中");
+
     setConfirmDialog({
       open: true,
       title: "任务归档",
-      description: `确定要归档任务「${task.title}」吗？`,
+      description: hasActiveAssignments 
+        ? `任务「${task.title}」仍有正在进行的分配，归档将强制结束这些分配并停用任务。确定要继续吗？`
+        : `确定要归档任务「${task.title}」吗？`,
       onConfirm: () => {
+        // 1. 更新主任务状态
         const newTasks = tasks.map(t => t.id === task.id ? { ...t, status: "已归档" as const } : t);
         setTasks(newTasks);
         setStorageData(STORAGE_KEYS.TASKS, newTasks);
+
+        // 2. 如果有活跃分配，级联更新分配状态为已完成
+        if (hasActiveAssignments) {
+          if (task.isAgentMode) {
+            const records = getStorageData<AgentRecoveryRecord[]>(STORAGE_KEYS.AGENT_RECOVERY, mockAgentRecovery);
+            const newRecords = records.map(r => r.taskId === task.id ? { ...r, status: "已完成" as const } : r);
+            setStorageData(STORAGE_KEYS.AGENT_RECOVERY, newRecords);
+          } else {
+            const records = getStorageData<NonAgentRecoveryRecord[]>(STORAGE_KEYS.NON_AGENT_RECOVERY, mockNonAgentRecovery);
+            const newRecords = records.map(r => r.taskId === task.id ? { ...r, status: "已完成" as const } : r);
+            setStorageData(STORAGE_KEYS.NON_AGENT_RECOVERY, newRecords);
+          }
+        }
+
         toast.success(`任务「${task.title}」已归档`);
         setConfirmDialog((prev) => ({ ...prev, open: false }));
       },
@@ -244,41 +292,32 @@ const TaskList = () => {
 
   // 根据任务状态渲染操作按钮
   const renderActions = (task: TaskRecord) => {
-    switch (task.status) {
-      case "进行中":
-        // 如果是草稿态（未发布），仅显示详情和删除
-        if (!task.isPublished) {
-          return (
-            <>
-              <button
-                className="text-primary hover:text-primary/80"
-                onClick={() => handleTaskDetail(task)}
-              >
-                任务详情
-              </button>
-              <button
-                className="text-destructive hover:text-destructive/80"
-                onClick={() => handleDeleteTask(task)}
-              >
-                删除
-              </button>
-            </>
-          );
-        }
-        // 正式发布的进行中任务，显示全量操作项
+    switch (task.status as string) {
+      case "草稿":
         return (
           <>
             <button
               className="text-primary hover:text-primary/80"
-              onClick={() => handleTaskDetail(task)}
+              onClick={() => navigate(`/dashboard/tasks/edit/${task.id}`)}
             >
-              任务详情
+              编辑
             </button>
+            <button
+              className="text-destructive hover:text-destructive/80"
+              onClick={() => handleDeleteTask(task)}
+            >
+              删除
+            </button>
+          </>
+        );
+      case "进行中":
+        return (
+          <>
             <button
               className="text-primary hover:text-primary/80"
               onClick={() => handleRecoveryDetail(task)}
             >
-              任务回收详情
+              任务分配详情
             </button>
             <button
               className="text-primary hover:text-primary/80"
@@ -294,55 +333,49 @@ const TaskList = () => {
             </button>
           </>
         );
-      case "已结束":
-        return (
-          <>
-            <button
-              className="text-primary hover:text-primary/80"
-              onClick={() => handleTaskDetail(task)}
-            >
-              任务详情
-            </button>
-            <button
-              className="text-primary hover:text-primary/80"
-              onClick={() => handleRecoveryDetail(task)}
-            >
-              任务回收详情
-            </button>
-            <button
-              className="text-primary hover:text-primary/80"
-              onClick={() => handleArchiveTask(task)}
-            >
-              任务归档
-            </button>
-            <button
-              className="text-primary hover:text-primary/80"
-              onClick={() => handleEnableTask(task)}
-            >
-              启用任务
-            </button>
-            <button
-              className="text-destructive hover:text-destructive/80"
-              onClick={() => handleDeleteTask(task)}
-            >
-              删除
-            </button>
-          </>
-        );
+      case "已完成":
+      case "已结束": // 兼容旧数据
+        {
+          const isExpired = isAfter(new Date(), parse(task.endTime, "yyyy/MM/dd HH:mm:ss", new Date()));
+          return (
+            <>
+              <button
+                className="text-primary hover:text-primary/80"
+                onClick={() => handleRecoveryDetail(task)}
+              >
+                任务分配详情
+              </button>
+              {!isExpired && (
+                <button
+                  className="text-primary hover:text-primary/80"
+                  onClick={() => handleEnableTask(task)}
+                >
+                  启用任务
+                </button>
+              )}
+              <button
+                className="text-primary hover:text-primary/80"
+                onClick={() => handleArchiveTask(task)}
+              >
+                任务归档
+              </button>
+              <button
+                className="text-destructive hover:text-destructive/80"
+                onClick={() => handleDeleteTask(task)}
+              >
+                删除
+              </button>
+            </>
+          );
+        }
       case "已归档":
         return (
           <>
             <button
               className="text-primary hover:text-primary/80"
-              onClick={() => handleTaskDetail(task)}
-            >
-              任务详情
-            </button>
-            <button
-              className="text-primary hover:text-primary/80"
               onClick={() => handleRecoveryDetail(task)}
             >
-              任务回收详情
+              任务分配详情
             </button>
             <button
               className="text-primary hover:text-primary/80"
@@ -514,7 +547,7 @@ const TaskList = () => {
             <ClearableSelect
               options={[
                 { label: "进行中", value: "进行中" },
-                { label: "已结束", value: "已结束" },
+                { label: "已完成", value: "已完成" },
                 { label: "已归档", value: "已归档" },
               ]}
               value={filterStatus}
@@ -550,9 +583,9 @@ const TaskList = () => {
                     onChange={toggleAll}
                   />
                 </th>
+                <th>任务标题</th>
                 <th>任务ID</th>
                 <th>任务类型</th>
-                <th>任务标题</th>
                 <th>录制类型</th>
                 <th>任务用途</th>
                 <th>预估份数</th>
@@ -563,6 +596,7 @@ const TaskList = () => {
                 <th>是否发布</th>
                 <th>任务状态</th>
                 <th>创建时间</th>
+                <th>更新时间</th>
                 <th className="min-w-[260px] sticky right-0 !bg-card z-20 shadow-[-6px_0_6px_-3px_rgba(0,0,0,0.05)] border-l">操作</th>
               </tr>
             </thead>
@@ -570,7 +604,7 @@ const TaskList = () => {
               {paginatedTasks.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={15}
+                    colSpan={16}
                     className="text-center text-muted-foreground py-8"
                   >
                     暂无数据
@@ -587,13 +621,20 @@ const TaskList = () => {
                         onChange={() => toggleRow(task.id)}
                       />
                     </td>
+                    <td>
+                      <button
+                        className="font-medium text-primary hover:underline text-left"
+                        onClick={() => handleTaskDetail(task)}
+                      >
+                        {task.title}
+                      </button>
+                    </td>
                     <td className="text-muted-foreground font-mono text-xs">{task.id}</td>
                     <td>
                       <span className="inline-block px-2 py-0.5 rounded text-xs border border-blue-300 text-blue-500 bg-blue-50">
                         音频
                       </span>
                     </td>
-                    <td className="font-medium">{task.title}</td>
                     <td>
                       <span className="inline-block px-2 py-0.5 rounded text-xs border border-blue-300 text-blue-500 bg-blue-50">
                         {task.recordingType.includes("整份") ? "整份" : "定量"}
@@ -637,14 +678,17 @@ const TaskList = () => {
                       </span>
                     </td>
                     <td>
-                      <span className={`inline-block px-2 py-0.5 rounded text-xs border ${task.status === "进行中" ? "border-green-300 text-green-600 bg-green-50" :
-                        task.status === "已结束" ? "border-gray-300 text-gray-500 bg-gray-50" :
-                          "border-amber-300 text-amber-600 bg-amber-50"
+                      <span className={`inline-block px-2 py-0.5 rounded text-xs border ${
+                        task.status === "草稿" ? "border-slate-300 text-slate-500 bg-slate-50" :
+                        task.status === "进行中" ? "border-green-300 text-green-600 bg-green-50" :
+                        (task.status === "已完成" || (task.status as string) === "已结束") ? "border-gray-300 text-gray-500 bg-gray-50" :
+                        "border-amber-300 text-amber-600 bg-amber-50"
                         }`}>
                         {task.status}
                       </span>
                     </td>
                     <td className="text-muted-foreground text-xs">{task.createTime}</td>
+                    <td className="text-muted-foreground text-xs">{task.updateTime}</td>
                     <td className="sticky right-0 !bg-card z-10 shadow-[-6px_0_6px_-3px_rgba(0,0,0,0.05)] border-l transition-colors group-hover:!bg-accent">
                       <div className="flex items-center gap-2 text-sm whitespace-nowrap">
                         {renderActions(task)}

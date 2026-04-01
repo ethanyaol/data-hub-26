@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus, Search, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
@@ -40,6 +40,19 @@ const RecorderManagement = () => {
   // 获取父级用户手机号
   const parentUser = mockMobileUsers.find(u => u.id === userId);
   const loginPhone = parentUser?.loginPhone || "-";
+
+  // 数据兜底策略：如果当前用户的录音人为空，尝试从 mockData 中恢复
+  useEffect(() => {
+    const userRecorders = recorders.filter(r => r.userId === userId);
+    if (userRecorders.length === 0) {
+      const initialMockRecorders = mockRecorders.filter(r => r.userId === userId);
+      if (initialMockRecorders.length > 0) {
+        const newRecorders = [...recorders, ...initialMockRecorders];
+        setRecorders(newRecorders);
+        setStorageData(STORAGE_KEYS.RECORDERS, newRecorders);
+      }
+    }
+  }, [userId, recorders]);
 
   // 脱敏辅助函数
   const maskPhone = (phone: string) => {
@@ -371,12 +384,14 @@ const RecorderManagement = () => {
                         >
                           编辑录音人信息
                         </button>
-                        <button
-                          className="text-xs text-destructive hover:text-destructive/80"
-                          onClick={() => handleDeleteRecorder(recorder)}
-                        >
-                          删除
-                        </button>
+                        {!recorder.isSyncRecorder && (
+                          <button
+                            className="text-xs text-destructive hover:text-destructive/80"
+                            onClick={() => handleDeleteRecorder(recorder)}
+                          >
+                            删除
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -21,7 +21,8 @@ import {
   Pie,
   Cell,
 } from "recharts";
-
+import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 // ============================================================
 // Types
 // ============================================================
@@ -103,16 +104,31 @@ const mockTasks: Option[] = [
   { value: "task-6", label: "文本对话采集任务C", id: "TASK-20260103" },
 ];
 
-// 列表视图 mock 数据
-const mockTableData = [
-  { id: "TASK-20260101", name: "多模态语音采集任务A", uploadCount: 12580, inspectedCount: 9840, activeUsers: 56 },
-  { id: "TASK-20260102", name: "图像标注采集任务B", uploadCount: 8920, inspectedCount: 7100, activeUsers: 34 },
-  { id: "TASK-20260103", name: "文本对话采集任务C", uploadCount: 5640, inspectedCount: 5200, activeUsers: 21 },
-  { id: "TASK-20260104", name: "视频采集任务D", uploadCount: 3200, inspectedCount: 1800, activeUsers: 15 },
-  { id: "TASK-20260105", name: "语音情感采集任务E", uploadCount: 7800, inspectedCount: 6500, activeUsers: 42 },
-  { id: "TASK-20260106", name: "多轮对话采集任务F", uploadCount: 2100, inspectedCount: 980, activeUsers: 8 },
-  { id: "TASK-20260107", name: "方言语音采集任务G", uploadCount: 4500, inspectedCount: 3200, activeUsers: 28 },
-  { id: "TASK-20260108", name: "图文配对采集任务H", uploadCount: 1650, inspectedCount: 1200, activeUsers: 11 },
+// ============================================================
+// 列表视图：子维度 Mock 数据
+// ============================================================
+
+// 1. 任务维度聚合数据 (Task Dimension)
+const aggregatedTaskData = [
+  { id: "T001", name: "基础通用采集任务A", totalEst: 500, uploaded: 450, rate: 0.9, fpy: 0.85, tph: 45, tat: 2.1, rejection: 12, discarded: 3 },
+  { id: "T002", name: "方言发音采集任务B", totalEst: 300, uploaded: 120, rate: 0.4, fpy: 0.72, tph: 32, tat: 5.6, rejection: 45, discarded: 15 },
+  { id: "T003", name: "多模态肢体采集C", totalEst: 1000, uploaded: 820, rate: 0.82, fpy: 0.94, tph: 58, tat: 1.2, rejection: 8, discarded: 0 },
+  { id: "T004", name: "特殊场景语义录制D", totalEst: 200, uploaded: 180, rate: 0.9, fpy: 0.88, tph: 24, tat: 3.4, rejection: 18, discarded: 5 },
+];
+
+// 2. 发音人维度聚合数据 (Speaker Dimension)
+const aggregatedSpeakerData = [
+  { id: "S1001", name: "王*明", taskCount: 4, audioCount: 1250, rate: 0.98, fpy: 0.92, tph: 65, tat: 0.8 },
+  { id: "S1002", name: "李*华", taskCount: 2, audioCount: 840, rate: 0.85, fpy: 0.76, tph: 42, tat: 2.5 },
+  { id: "S1003", name: "张*伟", taskCount: 7, audioCount: 3200, rate: 0.94, fpy: 0.88, tph: 55, tat: 1.1 },
+  { id: "S1004", name: "赵*芳", taskCount: 1, audioCount: 450, rate: 0.72, fpy: 0.65, tph: 28, tat: 4.8 },
+];
+
+// 3. 代理人维度聚合数据 (Agent Dimension)
+const aggregatedAgentData = [
+  { id: "A101", name: "华东音频工会", activeTasks: 5, totalQuota: 2000, activationRate: 0.88, teamAudio: 15600, teamRate: 0.92, teamFpy: 0.84, teamTph: 52 },
+  { id: "A102", name: "北方声码传媒", activeTasks: 3, totalQuota: 1200, activationRate: 0.95, teamAudio: 10200, teamRate: 0.96, teamFpy: 0.91, teamTph: 68 },
+  { id: "A103", name: "西域方言社", activeTasks: 8, totalQuota: 4500, activationRate: 0.45, teamAudio: 21000, teamRate: 0.78, teamFpy: 0.68, teamTph: 35 },
 ];
 
 // ============================================================
@@ -190,6 +206,7 @@ const renderPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, value }: {
 const Overview = () => {
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<"visual" | "table">("visual");
+  const [tableDimension, setTableDimension] = useState<"task" | "speaker" | "agent">("task");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
   const barData = useMemo(() => {
@@ -212,17 +229,19 @@ const Overview = () => {
   const [tableDateRange, setTableDateRange] = useState<DateRange | undefined>();
 
   const filteredTableData = useMemo(() => {
-    if (tableTasks.length === 0) {
-      return mockTableData;
-    }
-        // 简易模拟筛选：如果选中了任务，通过 ID 进行匹配
-    return mockTableData.filter(item => {
+    let sourceData = [];
+    if (tableDimension === "task") sourceData = aggregatedTaskData;
+    else if (tableDimension === "speaker") sourceData = aggregatedSpeakerData;
+    else sourceData = aggregatedAgentData;
+
+    if (tableTasks.length === 0) return sourceData;
+    
+    return sourceData.filter((item: any) => {
       return tableTasks.some(val => {
-        const t = mockTasks.find(o => o.value === val);
-        return t && item.id === t.id;
+        return item.name.includes(val) || item.id.includes(val);
       });
     });
-  }, [tableTasks]);
+  }, [tableDimension, tableTasks]);
 
   const handleReset = () => {
     setTableTasks([]);
@@ -231,6 +250,41 @@ const Overview = () => {
 
   const now = new Date();
   const currentTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+
+  /** 导出当前维度表格为 CSV */
+  const handleExportCSV = () => {
+    let headers: string[] = [];
+    let rows: string[][] = [];
+
+    if (tableDimension === "task") {
+      headers = ["任务名称", "任务ID", "总预估份数", "已回收份数", "完成进度", "一次通过率", "录制时效", "平均耗时", "打回量"];
+      rows = filteredTableData.map((r: any) => [
+        r.name, r.id, r.totalEst, r.uploaded, `${(r.rate * 100).toFixed(1)}%`, `${(r.fpy * 100).toFixed(1)}%`, r.tph, `${r.tat}h`, r.rejection
+      ]);
+    } else if (tableDimension === "speaker") {
+      headers = ["发音人姓名", "人员ID", "参与任务数", "累计录制音频", "综合通过率", "个人一次通过率", "个人录制时效", "平均响应(h)"];
+      rows = filteredTableData.map((r: any) => [
+        r.name, r.id, r.taskCount, r.audioCount, `${(r.rate * 100).toFixed(1)}%`, `${(r.fpy * 100).toFixed(1)}%`, r.tph, r.tat
+      ]);
+    } else {
+      headers = ["代理人名称", "计划承接总量", "人员激活率", "累计音频量", "团队通过率", "团队一次通过率", "团队录制时效"];
+      rows = filteredTableData.map((r: any) => [
+        r.name, r.totalQuota, `${(r.activationRate * 100).toFixed(1)}%`, r.teamAudio, `${(r.teamRate * 100).toFixed(1)}%`, `${(r.teamFpy * 100).toFixed(1)}%`, r.teamTph
+      ]);
+    }
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(row => row.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    const dimName = tableDimension === 'task' ? '任务' : tableDimension === 'speaker' ? '发音人' : '代理人';
+    link.setAttribute("download", `${dimName}维度统计_${format(now, "yyyyMMdd")}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -427,16 +481,36 @@ const Overview = () => {
         </div>
       ) : (
         <div className="space-y-4">
+          {/* 二级维度切换 (胶囊样) */}
+          <div className="flex items-center gap-1.5 p-1 bg-gray-100/80 rounded-lg w-fit">
+            {(["task", "speaker", "agent"] as const).map((dim) => (
+              <button
+                key={dim}
+                className={cn(
+                  "px-4 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer",
+                  tableDimension === dim
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+                onClick={() => setTableDimension(dim)}
+              >
+                {dim === "task" ? "任务维度" : dim === "speaker" ? "发音人维度" : "代理人维度"}
+              </button>
+            ))}
+          </div>
+
           {/* 列表视图筛选栏 */}
           <div className="bg-white rounded-xl border border-gray-100 p-5 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <MultiSelectFuzzySearch
-                  options={mockTasks}
-                  selectedValues={tableTasks}
-                  onSelect={setTableTasks}
-                  placeholder="搜索任务名称/ID..."
-                  className="w-64"
+                <Input
+                  value={tableTasks[0] || ""}
+                  onChange={(e) => setTableTasks([e.target.value])}
+                  placeholder={
+                    tableDimension === "task" ? "搜索任务名称/ID..." :
+                    tableDimension === "speaker" ? "搜索发音人姓名/ID..." : "搜索代理人名称/ID..."
+                  }
+                  className="w-64 h-9"
                 />
 
                 <DateRangePicker
@@ -458,45 +532,100 @@ const Overview = () => {
 
               <button
                 className="h-9 px-4 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 cursor-pointer transition-colors inline-flex items-center gap-2"
-                onClick={() => {
-                  const headers = ["任务名称", "任务ID", "已上传条数", "已质检条数", "活跃用户数"];
-                  const rows = mockTableData.map((r) => [r.name, r.id, r.uploadCount, r.inspectedCount, r.activeUsers].join(","));
-                  const csv = "\uFEFF" + [headers.join(","), ...rows].join("\n");
-                  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `任务采集概览_${format(new Date(), "yyyyMMdd")}.csv`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
+                onClick={handleExportCSV}
               >
                 <Download className="h-4 w-4" />
-                下载表格
+                导出当前维度表格
               </button>
             </div>
           </div>
 
           {/* 数据表格 */}
-          <div className="bg-white rounded-xl border border-gray-100">
+          <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
             <Table>
               <TableHeader>
-                <TableRow className="bg-gray-50/80">
-                  <TableHead className="font-semibold text-foreground">任务名称</TableHead>
-                  <TableHead className="font-semibold text-foreground">任务ID</TableHead>
-                  <TableHead className="font-semibold text-foreground text-right">已上传条数</TableHead>
-                  <TableHead className="font-semibold text-foreground text-right">已质检条数</TableHead>
-                  <TableHead className="font-semibold text-foreground text-right">活跃用户数</TableHead>
+                <TableRow className="bg-gray-50/80 whitespace-nowrap">
+                  {tableDimension === "task" ? (
+                    <>
+                      <TableHead className="font-bold text-foreground">任务名称</TableHead>
+                      <TableHead className="font-bold text-foreground">任务ID</TableHead>
+                      <TableHead className="font-bold text-foreground text-right">总预估份数</TableHead>
+                      <TableHead className="font-bold text-foreground text-right">已回收份数</TableHead>
+                      <TableHead className="font-bold text-foreground text-right">完成进度</TableHead>
+                      <TableHead className="font-bold text-foreground text-right">一次通过率</TableHead>
+                      <TableHead className="font-bold text-foreground text-right">录制时效(条/h)</TableHead>
+                      <TableHead className="font-bold text-foreground text-right">平均耗时</TableHead>
+                      <TableHead className="font-bold text-foreground text-right text-destructive">打回量</TableHead>
+                    </>
+                  ) : tableDimension === "speaker" ? (
+                    <>
+                      <TableHead className="font-bold text-foreground">发音人姓名</TableHead>
+                      <TableHead className="font-bold text-foreground">人员ID</TableHead>
+                      <TableHead className="font-bold text-foreground text-right">参与任务数</TableHead>
+                      <TableHead className="font-bold text-foreground text-right">累计录制音频</TableHead>
+                      <TableHead className="font-bold text-foreground text-right">综合通过率</TableHead>
+                      <TableHead className="font-bold text-foreground text-right">个人一次通过率</TableHead>
+                      <TableHead className="font-bold text-foreground text-right text-blue-600">个人时效(条/h)</TableHead>
+                      <TableHead className="font-bold text-foreground text-right">平均响应(h)</TableHead>
+                    </>
+                  ) : (
+                    <>
+                      <TableHead className="font-bold text-foreground">代理人名称</TableHead>
+                      <TableHead className="font-bold text-foreground text-right">计划承接总量</TableHead>
+                      <TableHead className="font-bold text-foreground text-right">人员激活率</TableHead>
+                      <TableHead className="font-bold text-foreground text-right">累计音频量</TableHead>
+                      <TableHead className="font-bold text-foreground text-right">团队通过率</TableHead>
+                      <TableHead className="font-bold text-foreground text-right text-emerald-600">团队一次通过率</TableHead>
+                      <TableHead className="font-bold text-foreground text-right">团队时效(条/h)</TableHead>
+                    </>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredTableData.map((row) => (
-                  <TableRow key={row.id} className="hover:bg-blue-50/30">
-                    <TableCell className="font-medium">{row.name}</TableCell>
-                    <TableCell className="text-muted-foreground font-mono text-xs">{row.id}</TableCell>
-                    <TableCell className="text-right tabular-nums">{row.uploadCount.toLocaleString()}</TableCell>
-                    <TableCell className="text-right tabular-nums">{row.inspectedCount.toLocaleString()}</TableCell>
-                    <TableCell className="text-right tabular-nums">{row.activeUsers.toLocaleString()}</TableCell>
+                {filteredTableData.map((row: any) => (
+                  <TableRow key={row.id} className="hover:bg-blue-50/30 transition-colors border-b last:border-0">
+                    {tableDimension === "task" ? (
+                      <>
+                        <TableCell className="font-bold text-blue-600 text-xs">{row.name}</TableCell>
+                        <TableCell className="text-muted-foreground font-mono text-[10px]">{row.id}</TableCell>
+                        <TableCell className="text-right tabular-nums">{row.totalEst}</TableCell>
+                        <TableCell className="text-right tabular-nums font-medium">{row.uploaded}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-bold">
+                            {(row.rate * 100).toFixed(1)}%
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{(row.fpy * 100).toFixed(1)}%</TableCell>
+                        <TableCell className="text-right tabular-nums font-bold">{row.tph}</TableCell>
+                        <TableCell className="text-right tabular-nums">{row.tat}h</TableCell>
+                        <TableCell className="text-right tabular-nums text-destructive font-bold">{row.rejection}</TableCell>
+                      </>
+                    ) : tableDimension === "speaker" ? (
+                      <>
+                        <TableCell className="font-bold">{row.name}</TableCell>
+                        <TableCell className="text-muted-foreground font-mono text-[10px]">{row.id}</TableCell>
+                        <TableCell className="text-right tabular-nums">{row.taskCount}</TableCell>
+                        <TableCell className="text-right tabular-nums font-medium">{row.audioCount}</TableCell>
+                        <TableCell className="text-right tabular-nums">{(row.rate * 100).toFixed(1)}%</TableCell>
+                        <TableCell className="text-right tabular-nums font-bold">{(row.fpy * 100).toFixed(1)}%</TableCell>
+                        <TableCell className="text-right tabular-nums text-blue-600 font-bold">{row.tph}</TableCell>
+                        <TableCell className="text-right tabular-nums">{row.tat}</TableCell>
+                      </>
+                    ) : (
+                      <>
+                        <TableCell className="font-bold text-slate-700">{row.name}</TableCell>
+                        <TableCell className="text-right tabular-nums">{row.totalQuota}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-bold", row.activationRate > 0.8 ? "bg-emerald-50 text-emerald-600" : "bg-orange-50 text-orange-600")}>
+                            {(row.activationRate * 100).toFixed(1)}%
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums font-medium">{row.teamAudio}</TableCell>
+                        <TableCell className="text-right tabular-nums">{(row.teamRate * 100).toFixed(1)}%</TableCell>
+                        <TableCell className="text-right tabular-nums font-bold text-emerald-600">{(row.teamFpy * 100).toFixed(1)}%</TableCell>
+                        <TableCell className="text-right tabular-nums">{row.teamTph}</TableCell>
+                      </>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

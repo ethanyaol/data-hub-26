@@ -27,7 +27,7 @@ const PrivacyAgreementDialog = ({
           <DialogTitle className="text-2xl font-bold text-center">个人信息保护与隐私协议书</DialogTitle>
         </DialogHeader>
         
-        <ScrollArea className="flex-1 px-8 py-6 bg-slate-50/50">
+        <div className="flex-1 overflow-y-auto min-h-0 px-8 py-6 bg-slate-50/50 scrollbar-thin scrollbar-thumb-slate-200">
           <div className="prose prose-slate max-w-none space-y-6 text-sm leading-relaxed text-slate-700 font-serif">
             <div className="space-y-1 not-italic font-sans">
               <p><strong>甲方（发起方）：</strong> DataHub 智能采集平台</p>
@@ -66,34 +66,36 @@ const PrivacyAgreementDialog = ({
               </p>
             </section>
 
-            <div className="pt-12 border-t border-slate-200">
-              <div className="flex justify-between items-end">
-                <div className="space-y-4">
-                  <p className="font-sans font-semibold">甲方盖章：</p>
-                  <div className="w-32 h-32 flex items-center justify-center border-2 border-red-500 rounded-full text-red-500 font-bold rotate-12 opacity-80 select-none pointer-events-none">
-                    <span className="text-center text-xs leading-tight">
-                      DataHub<br/>业务专用章
-                    </span>
+            <div className="mt-10 pb-20 border-t border-slate-200">
+              <div className="flex flex-col items-end pt-8">
+                <div className="w-64 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-900 font-bold whitespace-nowrap">乙方签名：</span>
                   </div>
-                </div>
-                <div className="space-y-4">
-                  <p className="font-sans font-semibold">乙方签名：</p>
-                  <div className="relative w-48 h-24 border-2 border-dashed border-slate-300 bg-white/80 rounded-lg flex items-center justify-center overflow-hidden">
-                    {/* Placeholder text (Subtle watermark) */}
-                    <span className="absolute text-[10px] text-slate-300 font-sans tracking-widest uppercase select-none">
-                      手写签字区 / Signature Area
+                  
+                  <div className="h-32 w-full border-2 border-slate-200 bg-white rounded-xl flex items-center justify-center relative overflow-hidden shadow-sm">
+                    <span className="absolute inset-0 flex items-center justify-center text-[10px] text-slate-300 font-sans tracking-widest uppercase select-none pointer-events-none">
+                      HANDWRITTEN SIGNATURE
                     </span>
                     <img 
                       src={UserSignature} 
                       alt="User Signature" 
-                      className="relative z-10 h-20 w-auto mix-blend-multiply grayscale contrast-125 transition-transform hover:scale-110 duration-500"
+                      className="relative z-10 max-h-28 w-auto grayscale contrast-150 brightness-90 rotate-[-1deg] drop-shadow-sm"
+                      onError={(e) => {
+                        console.error("Signature image failed to load");
+                        e.currentTarget.style.display = 'none';
+                      }}
                     />
+                  </div>
+                  
+                  <div className="text-right pr-1">
+                    <p className="text-[11px] text-slate-400 font-sans italic">签署时间：{signDate}</p>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </ScrollArea>
+        </div>
 
         <div className="p-6 shrink-0 border-t bg-white flex justify-end">
           <button

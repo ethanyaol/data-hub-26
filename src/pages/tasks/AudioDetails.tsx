@@ -233,7 +233,7 @@ const AudioDetails = () => {
             className="hover:text-foreground"
             onClick={() => navigate(-1)}
           >
-            人员采集计划
+            录音人执行详情
           </button>
           <span>/</span>
           <span className="text-foreground">音频详情</span>
@@ -252,6 +252,7 @@ const AudioDetails = () => {
           <div className="flex items-center gap-2">
             <Button
               size="sm"
+              variant="destructive"
               disabled={selectedRows.size === 0}
               onClick={() => setBatchRejectOpen(true)}
             >

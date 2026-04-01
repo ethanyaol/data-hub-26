@@ -61,7 +61,7 @@ const BatchRejectDialog = ({
           <Button variant="outline" onClick={handleCancel}>
             取消
           </Button>
-          <Button onClick={handleConfirm}>确认</Button>
+          <Button variant="destructive" onClick={handleConfirm}>确认</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

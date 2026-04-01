@@ -132,6 +132,12 @@ const EditMobileUserDialog = ({
     onOpenChange(false);
   };
 
+  // 脱敏辅助函数
+  const maskPhone = (phone: string) => {
+    if (!phone || phone === "-") return "-";
+    return phone.replace(/^(\d{3})\d{4}(\d{4})$/, "$1****$2");
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -146,7 +152,7 @@ const EditMobileUserDialog = ({
               登录手机号 <span className="text-destructive">*</span>
             </Label>
             <Input
-              value={loginPhone}
+              value={mode === "edit" ? maskPhone(loginPhone) : loginPhone}
               onChange={(e) => setLoginPhone(e.target.value)}
               placeholder="请输入手机号"
               maxLength={11}

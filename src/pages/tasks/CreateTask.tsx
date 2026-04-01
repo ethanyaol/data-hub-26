@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { 
+import { useNavigate, useParams } from "react-router-dom";
+import {
   Plus, Upload, Download, Trash2, Check, ChevronsUpDown, CalendarIcon,
-  FileText, Settings2, ShieldCheck, LayoutList
+  FileText, Settings2, ShieldCheck, LayoutList, FileJson
 } from "lucide-react";
-import { format, parseISO, parse, isBefore, startOfDay } from "date-fns";
+import { format, parseISO, parse, isBefore, differenceInDays, startOfDay, isValid } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { toast } from "sonner";
 import { mockTerms, mockTasks } from "./mockData";
@@ -56,6 +56,8 @@ const AUTHORIZED_USERS = [
 
 const CreateTask = () => {
   const navigate = useNavigate();
+  const { taskId } = useParams();
+  const isEditMode = !!taskId;
 
   // 表单字段状态
   const [title, setTitle] = useState("");
@@ -76,9 +78,9 @@ const CreateTask = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const steps = [
     { title: "任务基本信息" },
-    { title: "采集规格参数" },
-    { title: "任务说明与协议" },
-    { title: "录制词条" },
+    { title: "指标与用途" },
+    { title: "说明与协议" },
+    { title: "录制词条与模式" },
   ];
 
   // 词条相关状态
@@ -92,19 +94,42 @@ const CreateTask = () => {
   const [instructionPreviewUrl, setInstructionPreviewUrl] = useState<string | null>(null);
   const [privacyPreviewUrl, setPrivacyPreviewUrl] = useState<string | null>(null);
 
-  // 初始化默认发起人
+  // 初始化默认发起人或加载编辑数据
   useEffect(() => {
-    const authUserName = localStorage.getItem("auth_user") || "admin";
-    const user = AUTHORIZED_USERS.find(u => u.loginName === authUserName);
-    if (user) {
-      setInitiator(`${user.realName}(${user.loginName})`);
+    if (isEditMode && taskId) {
+      const allTasks = getStorageData(STORAGE_KEYS.TASKS, mockTasks);
+      const currentTask = allTasks.find(t => t.id === taskId);
+
+      if (currentTask) {
+        setTitle(currentTask.title);
+        setDemandInfo(currentTask.demandInfo);
+        // 修正日期格式：统一使用 '/' 分隔符处理以防 parse 报错
+        if (currentTask.endTime) {
+          setEndDate(currentTask.endTime.replace(/-/g, "/"));
+        }
+        setInitiator(currentTask.initiator);
+        setTaskPurpose(currentTask.taskPurpose);
+        setAgentMode(currentTask.isAgentMode ? "yes" : "no");
+        setEstimatedCount(currentTask.estimatedCount.toString());
+        setRecordingMode(currentTask.recordingType.includes("定量") ? "quantitative" : "whole");
+        setTermLength(currentTask.tag === "短词条" ? "短词条" : currentTask.tag === "长词条" ? "长词条" : "短词条");
+      } else {
+        toast.error("未找到相关任务，已切换至创建模式");
+        navigate("/dashboard/tasks/create");
+      }
     } else {
-      setInitiator(`${authUserName}(${authUserName})`);
+      const authUserName = localStorage.getItem("auth_user") || "admin";
+      const user = AUTHORIZED_USERS.find(u => u.loginName === authUserName);
+      if (user) {
+        setInitiator(`${user.realName}(${user.loginName})`);
+      } else {
+        setInitiator(`${authUserName}(${authUserName})`);
+      }
     }
-  }, []);
+  }, [isEditMode, taskId]);
 
   useEffect(() => {
-    if (instructionFile && instructionFile.type === "application/pdf") {
+    if (instructionFile && (instructionFile.type === "application/pdf" || instructionFile.type === "video/mp4")) {
       const url = URL.createObjectURL(instructionFile);
       setInstructionPreviewUrl(url);
       return () => URL.revokeObjectURL(url);
@@ -196,13 +221,31 @@ const CreateTask = () => {
     toast.success("批量删除成功");
   };
 
+  const handleDownloadTerms = () => {
+    if (terms.length === 0) {
+      toast.error("暂无录入词条可以下载");
+      return;
+    }
+    const data = JSON.stringify(terms, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `recording_terms_${taskId || 'new'}_${format(new Date(), "yyyyMMdd")}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success("词条数据已导出");
+  };
+
   const validateStep = (step: number): boolean => {
     switch (step) {
       case 1:
         if (!title.trim()) { toast.error("请输入任务名称"); return false; }
-        const titleRegex = /^[\u4e00-\u9fa5a-zA-Z0-9]+$/;
+        const titleRegex = /^[\u4e00-\u9fa5a-zA-Z0-9()（）_\-]+$/;
         if (!titleRegex.test(title)) {
-          toast.error("任务名称只能包含中英文或数字");
+          toast.error("任务名称只能包含中英文、数字、括号、下划线或横线");
           return false;
         }
         if (/^[a-zA-Z]+$/.test(title) || /^\d+$/.test(title)) {
@@ -210,7 +253,11 @@ const CreateTask = () => {
           return false;
         }
         if (!endDate) { toast.error("请选择任务结束日期"); return false; }
-        const endDateTime = parse(endDate, "yyyy-MM-dd HH:mm:ss", new Date());
+        const endDateTime = parse(endDate, "yyyy/MM/dd HH:mm:ss", new Date());
+        if (!isValid(endDateTime)) {
+          toast.error("任务结束日期格式非法，请重新选择");
+          return false;
+        }
         if (isBefore(endDateTime, new Date())) {
           toast.error("任务结束日期不能早于当前时间");
           return false;
@@ -222,13 +269,18 @@ const CreateTask = () => {
       case 2:
         if (!taskPurpose) { toast.error("请选择任务用途"); return false; }
         if (!termLength) { toast.error("请选择词条长度"); return false; }
-        if (!recordingMode) { toast.error("请选择录制类型"); return false; }
-        if (!estimatedCount.trim()) { toast.error("请输入预计录制份数"); return false; }
         return true;
       case 3:
         if (instructionMode === "text" && !instructionText.trim()) { toast.error("请输入任务说明"); return false; }
         if (instructionMode === "file" && !instructionFile) { toast.error("请上传任务说明文件"); return false; }
         if (!privacyFile) { toast.error("请上传采集隐私协议"); return false; }
+        return true;
+      case 4:
+        if (!recordingMode) { toast.error("请选择录制模式"); return false; }
+        if (!estimatedCount.trim()) {
+          toast.error(recordingMode === "quantitative" ? "请输入每个采集人可领取条数" : "请输入预计录制总份数");
+          return false;
+        }
         return true;
       default:
         return true;
@@ -245,46 +297,63 @@ const CreateTask = () => {
     setCurrentStep((prev) => Math.max(prev - 1, 1));
   };
 
-  const handleSaveData = (status: "进行中" | "已结束" | "已归档", isPublishedValue: boolean) => {
+  const handleSaveData = (status: "草稿" | "进行中" | "已完成" | "已归档", isPublishedValue: boolean) => {
     // 如果是保存草稿 (isPublishedValue === false)，则仅需校验第一步
     if (!isPublishedValue) {
       if (!validateStep(1)) return;
     } else {
-      // 如果是发布 (isPublishedValue === true)，则需通过前三步的全部校验
-      if (!validateStep(1) || !validateStep(2) || !validateStep(3)) return;
+      // 如果是发布 (isPublishedValue === true)，则需通过 1, 2, 3, 4 步的全部校验
+      if (!validateStep(1) || !validateStep(2) || !validateStep(3) || !validateStep(4)) return;
     }
 
-    const newTask: TaskRecord = {
-      id: `task-${Date.now()}`,
-      taskType: "音频",
-      title,
-      recordingType: recordingMode === "quantitative" ? "定量录制，不重复录制" : "整份录制，重复录制",
-      taskPurpose: taskPurpose as any,
-      estimatedCount: parseInt(estimatedCount) || 0,
-      initiator: initiator.split("(")[0],
-      demandInfo,
-      isAgentMode: agentMode === "yes",
-      endTime: endDate,
-      isPublished: isPublishedValue,
-      status: status,
-      createTime: format(new Date(), "yyyy/MM/dd HH:mm:ss"),
-      tag: taskPurpose === "暂无" ? "通用" : taskPurpose,
-    };
-
     const existingTasks = getStorageData(STORAGE_KEYS.TASKS, mockTasks);
-    const updatedTasks = [newTask, ...existingTasks];
+    let updatedTasks;
+
+    const finalEstimatedCount = recordingMode === "quantitative"
+      ? Math.ceil(terms.length / (parseInt(estimatedCount) || 1))
+      : (parseInt(estimatedCount) || 0);
+
+    if (isEditMode) {
+      updatedTasks = existingTasks.map(t =>
+        t.id === taskId
+          ? { ...t, title, recordingType: recordingMode === "quantitative" ? "定量录制，不重复录制" : "整份录制，重复录制", taskPurpose: taskPurpose as any, estimatedCount: finalEstimatedCount, initiator: initiator.split("(")[0], demandInfo, isAgentMode: agentMode === "yes", endTime: endDate, isPublished: isPublishedValue, status: status, updateTime: format(new Date(), "yyyy/MM/dd HH:mm:ss") }
+          : t
+      );
+    } else {
+      const newTask: TaskRecord = {
+        id: `task-${Date.now()}`,
+        taskType: "音频",
+        title,
+        recordingType: recordingMode === "quantitative" ? "定量录制，不重复录制" : "整份录制，重复录制",
+        taskPurpose: taskPurpose as any,
+        estimatedCount: finalEstimatedCount,
+        initiator: initiator.split("(")[0],
+        demandInfo,
+        isAgentMode: agentMode === "yes",
+        endTime: endDate,
+        isPublished: isPublishedValue,
+        status: status,
+        createTime: format(new Date(), "yyyy/MM/dd HH:mm:ss"),
+        updateTime: format(new Date(), "yyyy/MM/dd HH:mm:ss"),
+        tag: taskPurpose === "暂无" ? "通用" : taskPurpose,
+      };
+      updatedTasks = [newTask, ...existingTasks];
+    }
+
     setStorageData(STORAGE_KEYS.TASKS, updatedTasks);
 
     toast.success(isPublishedValue ? "任务发布成功" : "任务保存成功");
-    navigate("/dashboard/tasks");
+    if (isPublishedValue) {
+      navigate("/dashboard/tasks");
+    }
   };
 
   const handleSave = () => {
-    handleSaveData("进行中", false); // 保存草稿：状态进行中，发布状态为否
+    handleSaveData("草稿", false); // 保存草稿：状态设为草稿，发布状态为否
   };
 
   const handlePublish = () => {
-    handleSaveData("进行中", true); // 发布任务：状态进行中，发布状态为是
+    handleSaveData("进行中", true); // 发布任务：状态设为进行中，发布状态为是
   };
 
   return (
@@ -293,7 +362,7 @@ const CreateTask = () => {
       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
         <button onClick={() => navigate("/dashboard/tasks")} className="hover:text-primary transition-colors">任务管理</button>
         <span className="text-muted-foreground/30">/</span>
-        <span className="text-foreground font-medium">新建任务</span>
+        <span className="text-foreground font-medium">{isEditMode ? "编辑任务" : "新建任务"}</span>
       </div>
 
       {/* 步骤指示器 - 极简大气设计 (水平排列式) */}
@@ -311,8 +380,8 @@ const CreateTask = () => {
                   <div
                     className={cn(
                       "w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-500",
-                      isActive 
-                        ? "bg-primary text-white ring-8 ring-primary/10" 
+                      isActive
+                        ? "bg-primary text-white ring-8 ring-primary/10"
                         : isCompleted
                           ? "bg-emerald-600 text-white"
                           : "bg-slate-50 text-slate-400 border border-slate-200"
@@ -321,7 +390,7 @@ const CreateTask = () => {
                     {isCompleted ? <Check className="w-5 h-5" /> : stepNumber}
                   </div>
                   <div className="flex flex-col">
-                    <span 
+                    <span
                       className={cn(
                         "text-[13px] font-bold tracking-wide transition-colors",
                         isActive ? "text-primary" : isCompleted ? "text-emerald-600" : "text-slate-400"
@@ -336,7 +405,7 @@ const CreateTask = () => {
                 </div>
                 {!isLast && (
                   <div className="flex-1 mx-8 h-[1px] bg-slate-200 relative overflow-hidden">
-                    <div 
+                    <div
                       className={cn(
                         "absolute top-0 left-0 h-full bg-emerald-600 transition-all duration-1000 ease-in-out",
                         isCompleted ? "w-full" : "w-0"
@@ -393,10 +462,10 @@ const CreateTask = () => {
                     )}
                   >
                     <div className="flex items-center gap-2 overflow-hidden truncate">
-                      {endDate ? (
-                        format(parse(endDate, "yyyy-MM-dd HH:mm:ss", new Date()), "yyyy年MM月dd日 HH:mm:ss", { locale: zhCN })
+                      {endDate && isValid(parse(endDate, "yyyy/MM/dd HH:mm:ss", new Date())) ? (
+                        format(parse(endDate, "yyyy/MM/dd HH:mm:ss", new Date()), "yyyy年MM月dd日 HH:mm:ss", { locale: zhCN })
                       ) : (
-                        <span>选择任务截止日期</span>
+                        <span>{endDate || "选择任务截止日期"}</span>
                       )}
                     </div>
                     <CalendarIcon className="h-4 w-4 shrink-0 opacity-50" />
@@ -405,11 +474,15 @@ const CreateTask = () => {
                 <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 flex flex-col" align="start">
                   <Calendar
                     mode="single"
-                    selected={endDate ? parse(endDate, "yyyy-MM-dd HH:mm:ss", new Date()) : undefined}
+                    selected={
+                      endDate && isValid(parse(endDate, "yyyy/MM/dd HH:mm:ss", new Date())) 
+                        ? parse(endDate, "yyyy/MM/dd HH:mm:ss", new Date()) 
+                        : undefined
+                    }
                     onSelect={(date) => {
                       if (date) {
                         const timeStr = endDate ? endDate.split(" ")[1] : "23:59:59";
-                        setEndDate(`${format(date, "yyyy-MM-dd")} ${timeStr}`);
+                        setEndDate(`${format(date, "yyyy/MM/dd")} ${timeStr}`);
                       }
                     }}
                     initialFocus
@@ -442,11 +515,11 @@ const CreateTask = () => {
                             value={endDate ? endDate.split(" ")[1].split(":")[0] : "23"}
                             onChange={(e) => {
                               const val = e.target.value.padStart(2, "0").slice(-2);
-                              const parts = (endDate || format(new Date(), "yyyy-MM-dd 23:59:59")).split(" ");
+                              const parts = (endDate || format(new Date(), "yyyy/MM/dd 23:59:59")).split(" ");
                               const timeParts = parts[1].split(":");
                               timeParts[0] = val;
                               const newDateTimeStr = `${parts[0]} ${timeParts.join(":")}`;
-                              const newDateTime = parse(newDateTimeStr, "yyyy-MM-dd HH:mm:ss", new Date());
+                              const newDateTime = parse(newDateTimeStr, "yyyy/MM/dd HH:mm:ss", new Date());
 
                               if (isBefore(newDateTime, new Date())) {
                                 toast.warning("设置的时间不能早于当前时间");
@@ -467,11 +540,11 @@ const CreateTask = () => {
                             value={endDate ? endDate.split(" ")[1].split(":")[1] : "59"}
                             onChange={(e) => {
                               const val = e.target.value.padStart(2, "0").slice(-2);
-                              const parts = (endDate || format(new Date(), "yyyy-MM-dd 23:59:59")).split(" ");
+                              const parts = (endDate || format(new Date(), "yyyy/MM/dd 23:59:59")).split(" ");
                               const timeParts = parts[1].split(":");
                               timeParts[1] = val;
                               const newDateTimeStr = `${parts[0]} ${timeParts.join(":")}`;
-                              const newDateTime = parse(newDateTimeStr, "yyyy-MM-dd HH:mm:ss", new Date());
+                              const newDateTime = parse(newDateTimeStr, "yyyy/MM/dd HH:mm:ss", new Date());
 
                               if (isBefore(newDateTime, new Date())) {
                                 toast.warning("设置的时间不能早于当前时间");
@@ -491,11 +564,11 @@ const CreateTask = () => {
                             value={endDate ? endDate.split(" ")[1].split(":")[2] : "59"}
                             onChange={(e) => {
                               const val = e.target.value.padStart(2, "0").slice(-2);
-                              const parts = (endDate || format(new Date(), "yyyy-MM-dd 23:59:59")).split(" ");
+                              const parts = (endDate || format(new Date(), "yyyy/MM/dd 23:59:59")).split(" ");
                               const timeParts = parts[1].split(":");
                               timeParts[2] = val;
                               const newDateTimeStr = `${parts[0]} ${timeParts.join(":")}`;
-                              const newDateTime = parse(newDateTimeStr, "yyyy-MM-dd HH:mm:ss", new Date());
+                              const newDateTime = parse(newDateTimeStr, "yyyy/MM/dd HH:mm:ss", new Date());
 
                               if (isBefore(newDateTime, new Date())) {
                                 toast.warning("设置的时间不能早于当前时间");
@@ -620,15 +693,15 @@ const CreateTask = () => {
         </div>
       )}
 
-      {/* 第二阶段：采集规格参数 */}
+      {/* 第二阶段：指标与用途 */}
       {currentStep === 2 && (
         <div className="bg-card border border-border rounded-lg p-10 space-y-8 animate-in slide-in-from-right-4 duration-300">
           <div className="border-b border-border pb-4">
             <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
               <span className="w-1.5 h-6 bg-primary rounded-full" />
-              采集规格参数
+              指标与用途参数
             </h3>
-            <p className="text-sm text-muted-foreground mt-1">定义采集任务的技术指标和用途</p>
+            <p className="text-sm text-muted-foreground mt-1">定义采集任务的技术指标和业务用途</p>
           </div>
           <div className="grid grid-cols-2 gap-x-12 gap-y-8">
             <div className="space-y-3">
@@ -689,67 +762,15 @@ const CreateTask = () => {
                   <span className="text-sm font-medium group-hover:text-primary transition-colors">长词条 (长文本)</span>
                 </label>
               </div>
-            </div>
-
-            <div className="space-y-4 col-span-2 p-6 rounded-xl bg-muted/5 border border-dashed border-border/60">
-              <Label className="flex items-center gap-1 font-semibold text-primary">
-                <span className="text-destructive">*</span> 录制模式及份数:
-              </Label>
-              <div className="flex items-center gap-10">
-                <div className="flex flex-col gap-5">
-                  <div className="space-y-1.5 flex flex-col">
-                    <label className="flex items-center gap-2.5 cursor-pointer group">
-                      <input
-                        type="radio"
-                        name="recordingMode"
-                        checked={recordingMode === "whole"}
-                        onChange={() => setRecordingMode("whole")}
-                        className="accent-primary w-4 h-4"
-                      />
-                      <span className="text-sm font-medium group-hover:text-primary transition-colors tracking-wide">整份录制</span>
-                    </label>
-                    <p className="pl-6.5 ml-6.5 text-[11px] text-muted-foreground/60 leading-relaxed border-l-2 border-primary/10">所有录制者使用同一套文本，内容统一</p>
-                  </div>
-                  <div className="space-y-1.5 flex flex-col">
-                    <label className="flex items-center gap-2.5 cursor-pointer group">
-                      <input
-                        type="radio"
-                        name="recordingMode"
-                        checked={recordingMode === "quantitative"}
-                        onChange={() => setRecordingMode("quantitative")}
-                        className="accent-primary w-4 h-4"
-                      />
-                      <span className="text-sm font-medium group-hover:text-primary transition-colors tracking-wide">定量录制</span>
-                    </label>
-                    <p className="pl-6.5 ml-6.5 text-[11px] text-muted-foreground/60 leading-relaxed border-l-2 border-primary/10">系统根据每个人可领取条数自动按总量拆分文本分发给录制者</p>
-                  </div>
-                </div>
-
-                <div className="w-px h-24 bg-border/40 mx-2" />
-
-                <div className="flex-1 space-y-3">
-                  <Label className="text-xs text-muted-foreground font-semibold uppercase tracking-widest text-[#6366f1]">
-                    {recordingMode === "quantitative" ? "每个人可领取条数" : "预计录制份数 (全部词条算一份)"}:
-                  </Label>
-                  <div className="relative max-w-[280px]">
-                    <Input
-                      type="number"
-                      value={estimatedCount}
-                      min={1}
-                      max={1000000}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value);
-                        if (val > 1000000) return;
-                        setEstimatedCount(e.target.value);
-                      }}
-                      placeholder="支持 1 - 1,000,000"
-                      className="h-11 pl-4 pr-12 border-primary/20 focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all font-mono"
-                    />
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-primary/40 bg-background/80 px-1">
-                      {recordingMode === "quantitative" ? "条" : "份"}
-                    </div>
-                  </div>
-                </div>
+              <div className="mt-2 space-y-1">
+                <p className="text-[11px] text-muted-foreground leading-relaxed flex items-start gap-1.5">
+                  <span className="text-primary/70 font-bold shrink-0">短词条:</span>
+                  <span>移动端录制完成后自动切换至下一词条，无需手动操作。</span>
+                </p>
+                <p className="text-[11px] text-muted-foreground leading-relaxed flex items-start gap-1.5">
+                  <span className="text-primary/70 font-bold shrink-0">长词条:</span>
+                  <span>支持录制中暂停 / 继续，录制完成后不会自动切词，需手动切换下一条。</span>
+                </p>
               </div>
             </div>
           </div>
@@ -799,15 +820,15 @@ const CreateTask = () => {
                   </div>
                 ) : (
                   <div className="space-y-4 pt-4">
-                    <Label className="text-sm font-medium text-muted-foreground">上传预设指引文档 (PDF/docx)</Label>
+                    <Label className="text-sm font-medium text-muted-foreground">上传预设指引文档 (PDF/docx/MP4)</Label>
                     <div className="border-2 border-dashed border-border/60 rounded-xl p-10 flex flex-col items-center justify-center bg-muted/5 hover:bg-muted/10 transition-colors cursor-pointer relative group">
                       <Upload className="h-12 w-12 text-muted-foreground/30 group-hover:text-primary/40 transition-colors mb-4" />
                       <span className="text-sm font-medium">点击或拖拽文件至此处上传</span>
-                      <span className="text-xs text-muted-foreground mt-2">支持 PDF, docx，最大支持 200MB</span>
+                      <span className="text-xs text-muted-foreground mt-2">支持 PDF, docx, MP4，最大支持 200MB</span>
                       <input
                         type="file"
                         className="absolute inset-0 opacity-0 cursor-pointer"
-                        accept=".pdf,.docx"
+                        accept=".pdf,.docx,.mp4"
                         onChange={(e) => setInstructionFile(e.target.files?.[0] || null)}
                       />
                     </div>
@@ -887,6 +908,10 @@ const CreateTask = () => {
                     {instructionFile ? (
                       instructionFile.type === "application/pdf" && instructionPreviewUrl ? (
                         <iframe src={instructionPreviewUrl} className="w-full h-full border-none" title="Instruction Preview" />
+                      ) : instructionFile.type === "video/mp4" && instructionPreviewUrl ? (
+                        <div className="w-full h-full bg-black flex items-center justify-center">
+                          <video src={instructionPreviewUrl} controls className="max-w-full max-h-full" />
+                        </div>
                       ) : (
                         <div className="flex flex-col items-center justify-center h-full py-20 text-muted-foreground bg-muted/5">
                           <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
@@ -950,7 +975,7 @@ const CreateTask = () => {
         </div>
       )}
 
-      {/* 第四阶段：录制词条 */}
+      {/* 第四阶段：录制词条与模式 */}
       {currentStep === 4 && (
         <div className="animate-in slide-in-from-right-4 duration-300 space-y-6">
           <div className="bg-card border border-border rounded-lg p-8 shadow-sm">
@@ -958,9 +983,9 @@ const CreateTask = () => {
               <div>
                 <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
                   <span className="w-1.5 h-6 bg-primary rounded-full" />
-                  录制词条配置
+                  录制词条与模式配置
                 </h3>
-                <p className="text-sm text-muted-foreground mt-1">上传或管理本次采集任务的具体文本内容</p>
+                <p className="text-sm text-muted-foreground mt-1">上传管理文本内容，并配置回收模式与份数</p>
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -971,6 +996,15 @@ const CreateTask = () => {
                 >
                   <Download className="h-3.5 w-3.5 mr-1.5" />
                   Excel模版
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-muted hover:bg-muted/80 text-xs"
+                  onClick={handleDownloadTerms}
+                >
+                  <FileJson className="h-3.5 w-3.5 mr-1.5" />
+                  下载录入词条
                 </Button>
                 <Button
                   variant="outline"
@@ -1003,6 +1037,93 @@ const CreateTask = () => {
                     删除选中 ({selectedTerms.length})
                   </Button>
                 )}
+              </div>
+            </div>
+
+            <div className="p-6 mb-6 rounded-xl bg-muted/5 border border-dashed border-border/60">
+              <Label className="flex items-center gap-1 font-semibold text-primary mb-4">
+                <span className="text-destructive">*</span> 录制模式及份数配置:
+              </Label>
+              <div className="flex items-center gap-10">
+                <div className="flex flex-col gap-6">
+                  <div className="space-y-2 flex flex-col">
+                    <label className="flex items-center gap-2.5 cursor-pointer group">
+                      <input
+                        type="radio"
+                        name="recordingMode"
+                        checked={recordingMode === "whole"}
+                        onChange={() => setRecordingMode("whole")}
+                        className="accent-primary w-4 h-4"
+                      />
+                      <span className="text-sm font-medium group-hover:text-primary transition-colors tracking-wide">整份录制</span>
+                    </label>
+                    <p className="pl-6.5 ml-6.5 text-[11px] text-muted-foreground/60 leading-relaxed border-l-2 border-primary/10">所有录制者使用同一套文本</p>
+                  </div>
+                  <div className="space-y-2 flex flex-col">
+                    <label className="flex items-center gap-2.5 cursor-pointer group">
+                      <input
+                        type="radio"
+                        name="recordingMode"
+                        checked={recordingMode === "quantitative"}
+                        onChange={() => setRecordingMode("quantitative")}
+                        className="accent-primary w-4 h-4"
+                      />
+                      <span className="text-sm font-medium group-hover:text-primary transition-colors tracking-wide">定量录制</span>
+                    </label>
+                    <p className="pl-6.5 ml-6.5 text-[11px] text-muted-foreground/60 leading-relaxed border-l-2 border-primary/10">按总量拆分词条自动分发</p>
+                  </div>
+                </div>
+
+                <div className="w-px h-24 bg-border/40 mx-2" />
+
+                <div className="flex-1 space-y-3">
+                  <Label className="text-xs text-muted-foreground font-semibold uppercase tracking-widest text-[#6366f1]">
+                    {recordingMode === "quantitative" ? "每个采集人可领取条数" : "预计录制总份数"}:
+                  </Label>
+                  <div className="relative max-w-[280px]">
+                    <Input
+                      type="number"
+                      value={estimatedCount}
+                      min={1}
+                      max={1000000}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        if (val > 1000000) return;
+                        setEstimatedCount(e.target.value);
+                      }}
+                      placeholder="支持 1 - 1,000,000"
+                      className="h-11 pl-4 pr-12 border-primary/20 focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all font-mono"
+                    />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-primary/40 bg-background/80 px-1">
+                      {recordingMode === "quantitative" ? "条" : "份"}
+                    </div>
+                  </div>
+                  <div className="mt-4 p-4 bg-background rounded-xl border border-border/40 space-y-3 shadow-sm">
+                    <div className="flex items-center justify-between text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/60">
+                      <span>实时份数反馈</span>
+                      <span className="text-primary/40 italic">运算中</span>
+                    </div>
+                    {recordingMode === "quantitative" ? (
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-muted-foreground">预计产生份数</span>
+                          <span className="font-mono font-bold text-primary text-base">
+                            {Math.ceil(terms.length / (parseInt(estimatedCount) || 1))} <span className="text-xs font-normal opacity-60 ml-0.5">份</span>
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">预计产生份数</span>
+                          <span className="font-mono font-bold text-primary text-base">
+                            {estimatedCount || 0} <span className="text-xs font-normal opacity-60 ml-0.5">份</span>
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 

@@ -4,6 +4,9 @@ export const STORAGE_KEYS = {
   RECORDERS: "datahub_recorders",
   TASK_REMARKS: "datahub_task_remarks",
   USERS: "datahub_users",
+  SUBTASK_EXECUTIONS: "datahub_subtask_executions",
+  AGENT_RECOVERY: "datahub_agent_recovery",
+  NON_AGENT_RECOVERY: "datahub_non_agent_recovery",
 } as const;
 
 export const getStorageData = <T>(key: string, defaultValue: T): T => {
