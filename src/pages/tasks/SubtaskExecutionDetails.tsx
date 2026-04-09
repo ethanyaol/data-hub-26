@@ -34,10 +34,58 @@ const SubtaskExecutionDetails = () => {
   const { taskId, agentId, planId } = useParams<{ taskId: string; agentId?: string; planId?: string }>();
   const isAgentMode = !!agentId;
 
-  // 数据状态（持久化）
-  const [executionData, setExecutionData] = useState<SubtaskExecutionRecord[]>(() =>
-    getStorageData(STORAGE_KEYS.SUBTASK_EXECUTIONS, mockSubtaskExecutions)
-  );
+  const [allExecutionData, setAllExecutionData] = useState<SubtaskExecutionRecord[]>(() => {
+    const stored = getStorageData(STORAGE_KEYS.SUBTASK_EXECUTIONS, mockSubtaskExecutions);
+    // Check for compatibility: if data exists but first item has no taskId, it's old format
+    if (stored.length > 0 && !stored[0].taskId) {
+      console.warn("Detected old subtask data format, resetting to new mock data for compatibility.");
+      setStorageData(STORAGE_KEYS.SUBTASK_EXECUTIONS, mockSubtaskExecutions);
+      return mockSubtaskExecutions;
+    }
+    return stored;
+  });
+
+  // Filtered data for current allocation context
+  const executionData = useMemo(() => {
+    const filtered = allExecutionData.filter(r => {
+      const matchTask = r.taskId === taskId;
+      const matchAllocation = isAgentMode ? r.agentId === agentId : r.planId === planId;
+      return matchTask && matchAllocation;
+    });
+
+    // Fallback: If no data exists for this specific path, provide some default mock records
+    // but tag them with current IDs so user can interact with them.
+    if (filtered.length === 0 && allExecutionData.length > 0) {
+      const suffix = isAgentMode ? agentId : planId;
+      return mockSubtaskExecutions.slice(0, 3).map(r => ({
+        ...r,
+        taskId: taskId,
+        agentId: isAgentMode ? agentId : undefined,
+        planId: !isAgentMode ? planId : undefined,
+        subtaskId: `${r.subtaskId}_demo_${taskId}_${suffix}` 
+      }));
+    }
+    
+    return filtered;
+  }, [allExecutionData, taskId, agentId, planId, isAgentMode]);
+
+  // Helper to persist changes safely (supports UPSERT)
+  const updateStoreAndState = (updatedPartial: SubtaskExecutionRecord[]) => {
+    let nextTotal = [...allExecutionData];
+    
+    updatedPartial.forEach(u => {
+      const index = nextTotal.findIndex(r => r.subtaskId === u.subtaskId);
+      if (index !== -1) {
+        nextTotal[index] = u;
+      } else {
+        // Record doesn't exist in allExecutionData (was fallback demo data), append it
+        nextTotal.push(u);
+      }
+    });
+
+    setAllExecutionData(nextTotal);
+    setStorageData(STORAGE_KEYS.SUBTASK_EXECUTIONS, nextTotal);
+  };
 
   // Find current task info
   const currentTask = useMemo(() => {
@@ -103,7 +151,7 @@ const SubtaskExecutionDetails = () => {
     if (filterSubtaskRemark && !record.subtaskRemark.toLowerCase().includes(filterSubtaskRemark.toLowerCase())) return false;
     if (filterClaimStatus !== "all" && record.claimStatus !== filterClaimStatus) return false;
     if (filterRecoveryStatus !== "all" && record.recoveryStatus !== filterRecoveryStatus) return false;
-    
+
     if (filterUpdateTime?.from && filterUpdateTime?.to) {
       const recordDate = parse(record.updateTime, "yyyy/MM/dd HH:mm:ss", new Date());
       if (!isWithinInterval(recordDate, {
@@ -133,15 +181,15 @@ const SubtaskExecutionDetails = () => {
     const tSets = filteredRecords.length;
     const cSets = filteredRecords.filter(r => isAutoRecovered(r)).length;
     const percent = total > 0 ? ((passed / total) * 100).toFixed(2) : "0.00";
-    
-    return { 
-      totalTaskCount: total, 
-      totalPassedCount: passed, 
-      totalUploadedCount: uploaded, 
-      genderStats: gender, 
-      progressPercent: percent, 
-      totalSets: tSets, 
-      collectedSets: cSets 
+
+    return {
+      totalTaskCount: total,
+      totalPassedCount: passed,
+      totalUploadedCount: uploaded,
+      genderStats: gender,
+      progressPercent: percent,
+      totalSets: tSets,
+      collectedSets: cSets
     };
   }, [filteredRecords]);
 
@@ -164,6 +212,15 @@ const SubtaskExecutionDetails = () => {
   const handleQuery = () => {
     setCurrentPage(1);
     setSelectedIds(new Set());
+  };
+
+  const handleSyncMock = () => {
+    // Merge or Reset to original mock data for current specific taskId/agentId/planId
+    // For simplicity in demo, we reset ALL subtask data to fresh mock data
+    setAllExecutionData(mockSubtaskExecutions);
+    setStorageData(STORAGE_KEYS.SUBTASK_EXECUTIONS, mockSubtaskExecutions);
+    toast.success("执行详情数据已重置为系统默认 Mock 数据");
+    setCurrentPage(1);
   };
 
   const toggleRow = (id: string) => {
@@ -216,8 +273,7 @@ const SubtaskExecutionDetails = () => {
       const updatedData = executionData.map(r =>
         r.subtaskId === selectedRecord.subtaskId ? { ...r, recoveryStatus: "已回收" } as SubtaskExecutionRecord : r
       );
-      setExecutionData(updatedData);
-      setStorageData(STORAGE_KEYS.SUBTASK_EXECUTIONS, updatedData);
+      updateStoreAndState(updatedData);
       toast.success(`子任务 ${selectedRecord.subtaskId} 回收成功`);
 
       // Check if all subtasks are recovered to update parent status and metrics
@@ -229,9 +285,9 @@ const SubtaskExecutionDetails = () => {
 
       if (isAgentMode && agentId) {
         const agents = getStorageData(STORAGE_KEYS.AGENT_RECOVERY, mockAgentRecovery);
-        const updatedAgents = agents.map(a => 
-          a.agentCode === agentId ? { 
-            ...a, 
+        const updatedAgents = agents.map(a =>
+          a.agentCode === agentId ? {
+            ...a,
             status: updatedData.every(r => isAutoRecovered(r)) ? "已完成" : a.status,
             collectedAudioCount: allRecoveredData.length,
             collectedAudioTerms: currentUploadedTermsSum,
@@ -245,9 +301,9 @@ const SubtaskExecutionDetails = () => {
         }
       } else if (!isAgentMode && planId) {
         const plans = getStorageData(STORAGE_KEYS.NON_AGENT_RECOVERY, mockNonAgentRecovery);
-        const updatedPlans = plans.map(p => 
-          p.planIndex.toString() === planId ? { 
-            ...p, 
+        const updatedPlans = plans.map(p =>
+          p.planIndex.toString() === planId ? {
+            ...p,
             status: updatedData.every(r => isAutoRecovered(r)) ? "已完成" : p.status,
             collectedAudioCount: allRecoveredData.length,
             collectedAudioTerms: currentUploadedTermsSum,
@@ -260,7 +316,7 @@ const SubtaskExecutionDetails = () => {
           toast.info(`任务分配计划「${displayName.split(" (")[0]}」的所有子任务已回收，状态自动更新为“已完成”`);
         }
       }
-      
+
       setRecoveryConfirmOpen(false);
     }
   };
@@ -271,16 +327,14 @@ const SubtaskExecutionDetails = () => {
       const updatedData = executionData.map(r =>
         r.subtaskId === selectedRecord.subtaskId ? { ...r, subtaskRemark: remark, taskRemark: remark } : r
       );
-      setExecutionData(updatedData);
-      setStorageData(STORAGE_KEYS.SUBTASK_EXECUTIONS, updatedData);
+      updateStoreAndState(updatedData);
       toast.success("备注保存成功");
     } else if (selectedIds.size > 0) {
       // Batch sync
       const updatedData = executionData.map(r =>
         selectedIds.has(r.subtaskId) ? { ...r, subtaskRemark: remark, taskRemark: remark } : r
       );
-      setExecutionData(updatedData);
-      setStorageData(STORAGE_KEYS.SUBTASK_EXECUTIONS, updatedData);
+      updateStoreAndState(updatedData);
       toast.success(`成功为 ${selectedIds.size} 条记录添加备注`);
       setSelectedIds(new Set());
     }
@@ -289,20 +343,32 @@ const SubtaskExecutionDetails = () => {
   const handleTransferConfirm = (newRecorderId: string, newRecorderName: string) => {
     if (selectedRecord) {
       const oldRecorderId = selectedRecord.recorderId;
-      
+
       // 1. Update Subtask data
-      const updatedData = executionData.map(r =>
-        r.subtaskId === selectedRecord.subtaskId 
-          ? { ...r, recorderId: newRecorderId, recorderName: newRecorderName, updateTime: format(new Date(), "yyyy/MM/dd HH:mm:ss") } 
-          : r
-      );
-      setExecutionData(updatedData);
-      setStorageData(STORAGE_KEYS.SUBTASK_EXECUTIONS, updatedData);
+      const updatedData = executionData.map(r => {
+        if (r.subtaskId === selectedRecord.subtaskId) {
+          // Parse total terms from existing string (e.g., "10/10" -> "10")
+          const totalMatch = r.uploadedAudioCount.match(/\/(\d+)/);
+          const totalStr = totalMatch ? totalMatch[1] : "0";
+          
+          return {
+            ...r,
+            recorderId: newRecorderId,
+            recorderName: newRecorderName,
+            uploadedAudioCount: `0/${totalStr}`,
+            passedTerms: `0/${totalStr}`,
+            recoveryStatus: "未回收" as const,
+            updateTime: format(new Date(), "yyyy/MM/dd HH:mm:ss")
+          };
+        }
+        return r;
+      });
+      updateStoreAndState(updatedData);
 
       // 2. Sync with parent Recovery record (Agent/Plan)
       // Check if old recorder still has any subtasks in this specific context
       const stillHasTasks = updatedData.some(r => r.recorderId === oldRecorderId);
-      
+
       if (isAgentMode && agentId) {
         const agents = getStorageData(STORAGE_KEYS.AGENT_RECOVERY, mockAgentRecovery);
         const updatedAgents = agents.map(a => {
@@ -345,19 +411,19 @@ const SubtaskExecutionDetails = () => {
 
   const handleRecorderClick = (record: SubtaskExecutionRecord) => {
     if (record.recorderId === "-") return;
-    
+
     // Find the actual recorder record from storage/mock
     const allRecorders = getStorageData(STORAGE_KEYS.RECORDERS, mockRecorders);
     const recorderData = allRecorders.find(r => r.id === record.recorderId);
-    
+
     if (recorderData) {
       setEditingRecorder(recorderData);
-      
+
       // Find parent user phone
       const allUsers = getStorageData(STORAGE_KEYS.MOBILE_USERS, mockMobileUsers);
       const parentUser = allUsers.find(u => u.id === recorderData.userId);
       setEditingRecorderParentPhone(parentUser?.loginPhone || "-");
-      
+
       setRecorderEditOpen(true);
     } else {
       toast.error("未找到该录音人的完整档案信息");
@@ -372,21 +438,20 @@ const SubtaskExecutionDetails = () => {
     growthLocation: string;
   }) => {
     if (!editingRecorder) return;
-    
+
     // 1. Update RECORDERS storage
     const allRecorders = getStorageData(STORAGE_KEYS.RECORDERS, mockRecorders);
-    const updatedRecorders = allRecorders.map(r => 
+    const updatedRecorders = allRecorders.map(r =>
       r.id === editingRecorder.id ? { ...r, ...data } : r
     );
     setStorageData(STORAGE_KEYS.RECORDERS, updatedRecorders);
-    
+
     // 2. Update SUBTASK_EXECUTIONS storage (Sync nickname)
-    const updatedExecutions = executionData.map(r => 
+    const updatedExecutions = executionData.map(r =>
       r.recorderId === editingRecorder.id ? { ...r, recorderName: data.nickname, gender: data.gender as "男" | "女" | "-" } : r
     );
-    setExecutionData(updatedExecutions);
-    setStorageData(STORAGE_KEYS.SUBTASK_EXECUTIONS, updatedExecutions);
-    
+    updateStoreAndState(updatedExecutions);
+
     toast.success("录音人信息已同步更新");
   };
 
@@ -429,30 +494,30 @@ const SubtaskExecutionDetails = () => {
         <div className="flex items-center gap-1.5 text-sm text-muted-foreground mb-2">
           <button className="hover:text-foreground transition-colors" onClick={() => navigate("/dashboard/tasks")}>任务管理</button>
           <span>/</span>
-          <button className="hover:text-foreground transition-colors" onClick={() => navigate(`/dashboard/tasks/${taskId}/recovery`)}>任务分配详情</button>
+          <button className="hover:text-foreground transition-colors" onClick={() => navigate(`/dashboard/tasks/${taskId}/${isAgentMode ? "recovery" : "recovery-plan"}`)}>任务分配详情</button>
           <span>/</span>
           <span className="text-foreground font-medium">子任务执行详情</span>
         </div>
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">子任务执行详情</h1>
           <div className="flex items-center gap-3">
-             <Button 
-               variant="outline" 
-               size="sm" 
-               className="h-9 gap-1.5"
-               disabled={selectedIds.size === 0}
-               onClick={() => {
-                 setSelectedRecord(null);
-                 setEditTaskInfoOpen(true);
-               }}
-             >
-               批量添加备注
-               {selectedIds.size > 0 && (
-                 <span className="flex items-center justify-center bg-primary text-primary-foreground text-[10px] rounded-full w-4 h-4 ml-0.5">
-                   {selectedIds.size}
-                 </span>
-               )}
-             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5"
+              disabled={selectedIds.size === 0}
+              onClick={() => {
+                setSelectedRecord(null);
+                setEditTaskInfoOpen(true);
+              }}
+            >
+              批量添加备注
+              {selectedIds.size > 0 && (
+                <span className="flex items-center justify-center bg-primary text-primary-foreground text-[10px] rounded-full w-4 h-4 ml-0.5">
+                  {selectedIds.size}
+                </span>
+              )}
+            </Button>
           </div>
         </div>
       </div>
@@ -472,7 +537,7 @@ const SubtaskExecutionDetails = () => {
           <p className="text-lg font-bold text-foreground">{totalSets} 份</p>
         </div>
         <div className="bg-card/50 border border-border rounded-xl p-4 shadow-sm">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">已收集音频份数</p>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">回收音频份数</p>
           <p className="text-lg font-bold text-foreground">{collectedSets} 份</p>
         </div>
         <div className="bg-card/50 border border-border rounded-xl p-4 shadow-sm">
@@ -480,7 +545,7 @@ const SubtaskExecutionDetails = () => {
           <p className="text-lg font-bold text-foreground">{totalTaskCount} 条</p>
         </div>
         <div className="bg-card/50 border border-border rounded-xl p-4 shadow-sm">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">已收集音频条数</p>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">回收音频条数</p>
           <p className="text-lg font-bold text-foreground">{totalUploadedCount} 条</p>
         </div>
         <div className="bg-card/50 border border-border rounded-xl p-4 shadow-sm">
@@ -488,7 +553,7 @@ const SubtaskExecutionDetails = () => {
           <p className="text-lg font-bold text-foreground">{genderStats.m}:{genderStats.f}</p>
         </div>
         <div className="bg-card/50 border border-border rounded-xl p-4 shadow-sm">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">已完成验收条数</p>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">验收通过且回收条数</p>
           <div className="flex items-end gap-2">
             <p className="text-lg font-bold text-foreground">{totalPassedCount}/{totalTaskCount}</p>
             <span className="text-xs text-green-500 font-medium mb-1">({progressPercent}%)</span>
@@ -550,7 +615,7 @@ const SubtaskExecutionDetails = () => {
               className="w-44"
             />
           </div>
-          
+
           <div className="flex items-center gap-2 ml-auto">
             <Button size="sm" onClick={handleQuery} className="h-10 px-6 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md active:scale-95 transition-all">
               <Search className="h-4 w-4 mr-2" /> 查询
@@ -559,11 +624,18 @@ const SubtaskExecutionDetails = () => {
               <RotateCcw className="h-4 w-4" /> 重置
             </Button>
             <button
-              className="h-10 w-10 flex items-center justify-center border border-border/60 rounded-lg hover:bg-muted transition-colors"
-              title="刷新数据"
-              onClick={() => { toast.success("数据已重载"); handleReset(); }}
+              className="h-10 w-10 flex items-center justify-center border border-border/60 rounded-lg hover:bg-muted transition-colors text-orange-500"
+              title="重置为默认 Mock 数据"
+              onClick={handleSyncMock}
             >
-              <RefreshCw className="h-4 w-4 text-muted-foreground" />
+              <RefreshCw className="h-4 w-4" />
+            </button>
+            <button
+              className="h-10 w-10 flex items-center justify-center border border-border/60 rounded-lg hover:bg-muted transition-colors"
+              title="刷新当前视图"
+              onClick={() => { toast.success("视图已刷新"); handleReset(); }}
+            >
+              <RotateCcw className="h-4 w-4 text-muted-foreground" />
             </button>
           </div>
         </div>
@@ -587,9 +659,9 @@ const SubtaskExecutionDetails = () => {
                 <th className="px-4 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest text-center">当前录音人</th>
                 <th className="px-4 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest text-center">录音人 ID</th>
                 <th className="px-4 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest text-center">发音人性别</th>
-                {isAgentMode && <th className="px-4 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest text-center">领取状态</th>}
+                <th className="px-4 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest text-center">领取状态</th>
                 <th className="px-4 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest text-center">回收状态</th>
-                <th className="px-4 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest text-center">任务条数</th>
+
                 <th className="px-4 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest text-center">已上传音频</th>
                 <th className="px-4 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest text-center">验收通过</th>
                 <th className="px-4 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest text-center text-ellipsis overflow-hidden">子任务备注</th>
@@ -622,7 +694,7 @@ const SubtaskExecutionDetails = () => {
                       />
                     </td>
                     <td className="px-4 py-3 text-sm font-medium text-foreground truncate max-w-[150px] text-center" title={record.subtaskId}>{record.subtaskId}</td>
-                    <td 
+                    <td
                       className={`px-4 py-3 text-sm font-medium text-center transition-colors ${record.recorderName === "-" ? "text-muted-foreground/50" : "text-primary hover:text-primary/70 cursor-pointer hover:underline underline-offset-4 decoration-primary/30"}`}
                       onClick={() => handleRecorderClick(record)}
                     >
@@ -630,9 +702,9 @@ const SubtaskExecutionDetails = () => {
                     </td>
                     <td className={`px-4 py-3 text-sm font-mono text-xs text-center ${record.recorderId === "-" ? "text-muted-foreground/30" : "text-muted-foreground"}`}>{record.recorderId}</td>
                     <td className="px-4 py-3 text-sm text-foreground text-center">{record.gender}</td>
-                    {isAgentMode && <td className="px-4 py-3 text-center">{renderStatus(record.claimStatus, "claim")}</td>}
+                    <td className="px-4 py-3 text-center">{renderStatus(record.claimStatus, "claim")}</td>
                     <td className="px-4 py-3 text-center">{renderStatus(isAutoRecovered(record) ? "已回收" : record.recoveryStatus, "recovery")}</td>
-                    <td className="px-4 py-3 text-sm font-semibold text-center">{record.endIndex - record.startIndex + 1}</td>
+
                     <td className={`px-4 py-3 text-sm font-medium text-center ${record.uploadedAudioCount === "-" ? "text-muted-foreground/50" : "text-foreground"}`}>{record.uploadedAudioCount}</td>
                     <td className={`px-4 py-3 text-sm font-medium text-center ${record.passedTerms === "-" ? "text-muted-foreground/50" : "text-green-600"}`}>{record.passedTerms}</td>
                     <td className={`px-4 py-3 text-sm truncate max-w-[120px] text-center ${record.subtaskRemark === "-" ? "text-muted-foreground/50" : "text-foreground/70"}`} title={record.subtaskRemark}>{record.subtaskRemark}</td>
@@ -642,20 +714,20 @@ const SubtaskExecutionDetails = () => {
                     <td className="px-4 py-3 text-sm text-muted-foreground font-mono text-xs text-center">{record.updateTime}</td>
                     <td className="px-4 py-3 sticky right-0 bg-background/95 backdrop-blur-sm z-10 shadow-[-10px_0_15px_-5px_rgba(0,0,0,0.05)] border-l border-border/40 group-hover/row:bg-muted/80 transition-all duration-300">
                       <div className="flex items-center">
-                        <button 
+                        <button
                           className="text-primary hover:text-primary/80 text-xs mr-4 transition-colors font-medium whitespace-nowrap"
                           onClick={() => navigate(`/dashboard/tasks/${taskId}/recovery/${agentId || planId}/execution/${encodeURIComponent(record.recorderId)}/audio`)}
                         >
                           音频详情
                         </button>
-                        <button 
+                        <button
                           className="text-primary hover:text-primary/80 text-xs mr-4 transition-colors font-medium whitespace-nowrap"
                           onClick={() => handleEditTaskInfo(record)}
                         >
                           添加备注
                         </button>
                         {((isAgentMode && record.claimStatus !== "未领取") || (!isAgentMode && record.recorderName !== "-")) && (
-                          <button 
+                          <button
                             className="text-primary hover:text-primary/80 text-xs mr-4 transition-colors font-medium whitespace-nowrap"
                             onClick={() => handlePreviewAgreement(record)}
                           >
@@ -664,20 +736,20 @@ const SubtaskExecutionDetails = () => {
                         )}
                         {!isAutoRecovered(record) && (isAgentMode ? record.claimStatus !== "未领取" : true) && (
                           <div className="flex items-center gap-2">
-                            <button 
+                            <button
                               className="text-primary hover:text-primary/80 text-xs transition-colors font-medium whitespace-nowrap"
                               onClick={() => {
                                 setSelectedRecord(record);
                                 setTransferOpen(true);
                               }}
                             >
-                               转派
+                              转派
                             </button>
-                            <button 
+                            <button
                               className="text-destructive hover:text-destructive/80 text-xs transition-colors font-medium whitespace-nowrap"
                               onClick={() => handleOpenRecovery(record)}
                             >
-                               回收
+                              回收
                             </button>
                           </div>
                         )}
@@ -707,7 +779,7 @@ const SubtaskExecutionDetails = () => {
             <option key={size} value={size}>{size}条/页</option>
           ))}
         </select>
-        
+
         <div className="flex items-center gap-0.5">
           <button
             disabled={currentPage <= 1}
@@ -716,7 +788,7 @@ const SubtaskExecutionDetails = () => {
           >
             &lt;
           </button>
-          
+
           {getPageNumbers().map((p, idx) =>
             p === "ellipsis" ? (
               <span key={`e-${idx}`} className="w-7 h-7 flex items-center justify-center text-xs">
@@ -726,17 +798,16 @@ const SubtaskExecutionDetails = () => {
               <button
                 key={p}
                 onClick={() => setCurrentPage(p)}
-                className={`w-7 h-7 flex items-center justify-center rounded text-xs cursor-pointer ${
-                  currentPage === p
+                className={`w-7 h-7 flex items-center justify-center rounded text-xs cursor-pointer ${currentPage === p
                     ? "bg-primary text-primary-foreground"
                     : "border border-border hover:bg-accent"
-                }`}
+                  }`}
               >
                 {p}
               </button>
             )
           )}
-          
+
           <button
             disabled={currentPage >= totalPages}
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}

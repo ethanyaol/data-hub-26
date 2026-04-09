@@ -237,6 +237,7 @@ export const mockNonAgentRecovery: NonAgentRecoveryRecord[] = [
 ];
 
 export const mockSubtaskExecutions: SubtaskExecutionRecord[] = [
+  // For Agent wg-20251223-0804 (Task: task-20260401-in-progress)
   { 
     subtaskId: "1_1711884610", 
     startIndex: 1, 
@@ -252,7 +253,9 @@ export const mockSubtaskExecutions: SubtaskExecutionRecord[] = [
     passedTerms: "10/10", 
     subtaskRemark: "优先跟进",
     createTime: "2026/02/02 12:10:10",
-    updateTime: "2026/02/02 14:10:10"
+    updateTime: "2026/02/02 14:10:10",
+    taskId: "task-20260401-in-progress",
+    agentId: "wg-20251223-0804"
   },
   { 
     subtaskId: "1_1711884635", 
@@ -269,29 +272,35 @@ export const mockSubtaskExecutions: SubtaskExecutionRecord[] = [
     passedTerms: "15/15", 
     subtaskRemark: "质检全过自动回收示例",
     createTime: "2026/02/03 09:00:00",
-    updateTime: "2026/02/03 10:30:00"
+    updateTime: "2026/02/03 10:30:00",
+    taskId: "task-20260401-in-progress",
+    agentId: "wg-20251223-0804"
   },
+  // For Agent lg-20260101-0901 (Task: fsfefe-20251223-aa)
   { 
-    subtaskId: "1_1711884680", 
-    startIndex: 26, 
-    endIndex: 30, 
-    claimStatus: "未领取", 
-    recoveryStatus: "未回收", 
-    taskCount: 5, 
-    recorderName: "-", 
-    recorderId: "-", 
-    gender: "-",
-    taskRemark: "-", 
-    uploadedAudioCount: "-", 
-    passedTerms: "-", 
-    subtaskRemark: "-",
-    createTime: "2026/02/04 14:00:00",
-    updateTime: "2026/02/04 14:00:00"
-  },
-  { 
-    subtaskId: "1_1711884690", 
-    startIndex: 31, 
+    subtaskId: "2_1711884680", 
+    startIndex: 1, 
     endIndex: 50, 
+    claimStatus: "已领取", 
+    recoveryStatus: "未回收", 
+    taskCount: 50, 
+    recorderName: "梅西", 
+    recorderId: "rec-101", 
+    gender: "男",
+    taskRemark: "-", 
+    uploadedAudioCount: "45/50", 
+    passedTerms: "40/50", 
+    subtaskRemark: "代理李工的项目",
+    createTime: "2026/02/04 14:00:00",
+    updateTime: "2026/02/04 14:00:00",
+    taskId: "fsfefe-20251223-aa",
+    agentId: "lg-20260101-0901"
+  },
+  // For Plan 1 (Task: task-20260501-tuning)
+  { 
+    subtaskId: "3_1711884690", 
+    startIndex: 1, 
+    endIndex: 20, 
     claimStatus: "已领取", 
     recoveryStatus: "未回收", 
     taskCount: 20, 
@@ -301,9 +310,31 @@ export const mockSubtaskExecutions: SubtaskExecutionRecord[] = [
     taskRemark: "-", 
     uploadedAudioCount: "18/20", 
     passedTerms: "12/20", 
-    subtaskRemark: "部分词条待质检",
+    subtaskRemark: "调优集子任务",
     createTime: "2026/02/05 10:00:00",
-    updateTime: "2026/02/05 16:20:00"
+    updateTime: "2026/02/05 16:20:00",
+    taskId: "task-20260501-tuning",
+    planId: "1"
+  },
+  // For Plan 2 (Task: task-20260205-ff)
+  { 
+    subtaskId: "4_1711884700", 
+    startIndex: 1, 
+    endIndex: 15, 
+    claimStatus: "已领取", 
+    recoveryStatus: "已回收", 
+    taskCount: 15, 
+    recorderName: "孙兴慜", 
+    recorderId: "rec-007", 
+    gender: "男",
+    taskRemark: "录制完毕", 
+    uploadedAudioCount: "15/15", 
+    passedTerms: "15/15", 
+    subtaskRemark: "东北话计划",
+    createTime: "2026/02/06 09:00:00",
+    updateTime: "2026/02/06 09:00:00",
+    taskId: "task-20260205-ff",
+    planId: "2"
   },
 ];
 

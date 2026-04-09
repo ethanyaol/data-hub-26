@@ -284,7 +284,7 @@ const TaskRecoveryAgent = () => {
             <span className="text-sm font-semibold text-foreground">{summaries.totalEstCount}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-sm text-muted-foreground">已收集总份数</span>
+            <span className="text-sm text-muted-foreground">回收总份数</span>
             <span className="text-sm font-semibold text-foreground">{summaries.totalCollCount}</span>
           </div>
           <div className="flex items-center gap-1.5">
@@ -292,7 +292,7 @@ const TaskRecoveryAgent = () => {
             <span className="text-sm font-semibold text-foreground">{summaries.totalGenderM}:{summaries.totalGenderF}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-sm text-muted-foreground">已完成验收条数</span>
+            <span className="text-sm text-muted-foreground">验收通过且回收条数</span>
             <span className="text-sm font-semibold text-foreground">{summaries.totalAccTerms} 条</span>
           </div>
         </div>
@@ -311,11 +311,11 @@ const TaskRecoveryAgent = () => {
                 <th>代理码</th>
                 <th>采集码</th>
                 <th>预计录制音频份数</th>
-                <th>已收集音频份数</th>
+                <th>回收音频份数</th>
                 <th>预计录制音频条数</th>
-                <th>已收集音频条数</th>
+                <th>回收音频条数</th>
                 <th>男女比例</th>
-                <th>已完成验收条数</th>
+                <th>验收通过且回收条数</th>
                 <th>状态</th>
                 <th>创建时间</th>
                 <th className="min-w-[280px] sticky right-0 !bg-card z-20 shadow-[-6px_0_6px_-3px_rgba(0,0,0,0.05)] border-l">操作</th>

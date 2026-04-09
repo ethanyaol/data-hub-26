@@ -49,8 +49,16 @@ const TaskAllocationDialog = ({
   // Calculate Capacity Constraints
   const { maxAvailable, claimedCount } = useMemo(() => {
     // 1. Claimed count (minimum bound for edit mode)
-    // NOTE: In mock, we simplify this. In real app, we'd filter subtasks by agent/plan
-    const claimedIdxCount = 0; 
+    let claimedIdxCount = 0; 
+    if (isEditMode && mode === "nonagent" && editingRecord) {
+      const allExecutions = getStorageData(STORAGE_KEYS.SUBTASK_EXECUTIONS, []);
+      const planName = (editingRecord as NonAgentRecoveryRecord).planName;
+      claimedIdxCount = allExecutions.filter(r => 
+        r.taskId === taskId && 
+        r.planId === planName && 
+        r.claimStatus === "已领取"
+      ).length;
+    }
 
     // 2. Task capacity (maximum bound)
     const allTasks = getStorageData(STORAGE_KEYS.TASKS, mockTasks);
@@ -78,7 +86,7 @@ const TaskAllocationDialog = ({
     
     return { 
       maxAvailable: remaining, 
-      claimedCount: isEditMode ? claimedIdxCount : 0 
+      claimedCount: claimedIdxCount 
     };
   }, [taskId, isEditMode, editingRecord, open, mode]);
 
@@ -114,13 +122,13 @@ const TaskAllocationDialog = ({
       const isWhole = currentTask.recordingType.includes("整份");
       // Provide defaults if fields are missing in localStorage/mock
       const x = isWhole ? (currentTask.totalTerms || 100) : (currentTask.termsPerPerson || 50);
-      
+
       // Logic for y (total completed terms)
       const y = peopleCount * x;
 
       const isRemainderIssue = !isWhole && currentTask.totalTerms && (currentTask.totalTerms % (currentTask.termsPerPerson || 1) !== 0);
 
-      const text = mode === "agent" 
+      const text = mode === "agent"
         ? `该代理预计录制 ${copies} 份，共计完成 ${y} 词条 (按每份 ${x} 词条测算)`
         : `预计录制人数 ${peopleCount} 人，每人预计领取 ${x} 个词条，共计完成 ${y} 词条，共计 ${copies} 份`;
 
@@ -145,7 +153,7 @@ const TaskAllocationDialog = ({
       toast.error("请输入预计录制份数");
       return;
     }
-    
+
     const copies = Number(estimatedCopies);
 
     // Business Logic for Capacity Validation
@@ -161,24 +169,28 @@ const TaskAllocationDialog = ({
 
     if (isEditMode && editingRecord) {
       if (copies < claimedCount) {
-        toast.error(`修改失败：目标份数 (${copies}) 不能小于当前已领取份数 (${claimedCount})`);
+        toast.error(`修改失败：目标份数 (${copies}) 不能小于该计划当前已领取份数 (${claimedCount})`);
+        return;
+      }
+      if (mode === "nonagent" && copies < selectedPersonIds.length) {
+        toast.error(`修改失败：预计录制份数 (${copies}) 不能小于当前已锁定的发音人总数 (${selectedPersonIds.length})`);
         return;
       }
 
       if (mode === "agent") {
         const agents = getStorageData(STORAGE_KEYS.AGENT_RECOVERY, mockAgentRecovery);
-        const updatedAgents = agents.map(a => 
+        const updatedAgents = agents.map(a =>
           (a.agentCode === (editingRecord as AgentRecoveryRecord).agentCode && a.taskId === taskId)
-            ? { ...a, estimatedAudioCount: copies, estimatedAudioTerms: copies * 100, selectedPersonIds: selectedPersonIds } 
+            ? { ...a, estimatedAudioCount: copies, estimatedAudioTerms: copies * 100, selectedPersonIds: selectedPersonIds }
             : a
         );
         setStorageData(STORAGE_KEYS.AGENT_RECOVERY, updatedAgents);
         toast.success("任务分配修改成功");
       } else {
         const plans = getStorageData(STORAGE_KEYS.NON_AGENT_RECOVERY, mockNonAgentRecovery);
-        const updatedPlans = plans.map(p => 
+        const updatedPlans = plans.map(p =>
           (p.planIndex === (editingRecord as NonAgentRecoveryRecord).planIndex && p.taskId === taskId)
-            ? { ...p, estimatedAudioCount: copies, estimatedAudioTerms: copies * 100, selectedPersonIds: selectedPersonIds } 
+            ? { ...p, estimatedAudioCount: copies, estimatedAudioTerms: copies * 100, selectedPersonIds: selectedPersonIds }
             : p
         );
         setStorageData(STORAGE_KEYS.NON_AGENT_RECOVERY, updatedPlans);
@@ -191,7 +203,7 @@ const TaskAllocationDialog = ({
 
       if (mode === "agent") {
         if (!agentName) { toast.error("请选择代理"); return; }
-        
+
         const agents = getStorageData(STORAGE_KEYS.AGENT_RECOVERY, mockAgentRecovery);
         const newAgent: AgentRecoveryRecord = {
           taskId: taskId,
@@ -213,10 +225,10 @@ const TaskAllocationDialog = ({
         toast.success("代理任务分配成功");
       } else {
         if (!planName.trim()) { toast.error("请输入计划名称"); return; }
-        
+
         const plans = getStorageData(STORAGE_KEYS.NON_AGENT_RECOVERY, mockNonAgentRecovery);
         const maxIndex = plans.reduce((max, p) => Math.max(max, p.planIndex || 0), 0);
-        
+
         const newPlan: NonAgentRecoveryRecord = {
           taskId: taskId,
           planIndex: maxIndex + 1,
@@ -293,7 +305,7 @@ const TaskAllocationDialog = ({
             <div className="flex items-center gap-2">
               <Input
                 type="number"
-                min={1}
+                min={Math.max(1, claimedCount)}
                 value={estimatedCopies}
                 onChange={(e) => setEstimatedCopies(e.target.value)}
                 placeholder="请输入"
@@ -301,37 +313,43 @@ const TaskAllocationDialog = ({
               />
               <span className="text-sm text-muted-foreground font-medium">份</span>
             </div>
+            {isEditMode && claimedCount > 0 && (
+              <p className="text-[11px] text-orange-600 font-medium">
+                * 当前已有 {claimedCount} 份被领取，份数不可低于此数值
+              </p>
+            )}
           </div>
 
-          {!isEditMode && (
+          {mode !== "agent" && (
             <>
-            {mode !== "agent" && (
               <div className="flex items-center justify-between py-1 bg-slate-50 px-3 rounded-md border border-dashed border-slate-200">
-                <span className="text-sm text-slate-500">已分配发音人</span>
+                <span className="text-sm text-slate-500">已分配录音人</span>
                 <span className="text-sm font-semibold text-primary">
                   {selectedPersonIds.length} 人
                 </span>
               </div>
-            )}
-    
-            <div className="flex items-center gap-2 pt-1">
-              {mode !== "agent" ? (
-                <Button variant="outline" size="sm" onClick={() => setPersonnelDialogOpen(true)} className="h-9 gap-1.5 h-9 font-normal">
-                  选择人员
+      
+              <div className="flex items-center gap-2 pt-1">
+                <Button variant="outline" size="sm" onClick={() => setPersonnelDialogOpen(true)} className="h-9 gap-1.5 font-normal">
+                  {isEditMode ? "追加人员" : "选择人员"}
                 </Button>
-              ) : (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-md text-[11px] font-medium border border-blue-100">
-                  <span className="inline-block w-1 h-1 bg-blue-500 rounded-full mr-1.5" />
-                  参与人数由代理线下自行统筹
-                </div>
-              )}
-              {mode === "nonagent" && selectedPersonIds.length > 0 && (
+                {selectedPersonIds.length > 0 && (
                   <span className="text-[11px] text-muted-foreground animate-in fade-in slide-in-from-left-2 transition-all">
                     已选数量：{selectedPersonIds.length}/{estimatedCopies || "-"}
                   </span>
                 )}
               </div>
+              {isEditMode && (
+                <p className="text-[10px] text-muted-foreground">注：已添加至此计划的人员不可移除</p>
+              )}
             </>
+          )}
+
+          {mode === "agent" && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-md text-[11px] font-medium border border-blue-100">
+              <span className="inline-block w-1 h-1 bg-blue-500 rounded-full mr-1.5" />
+              参与人数由代理线下自行统筹
+            </div>
           )}
 
           {allocationText && (

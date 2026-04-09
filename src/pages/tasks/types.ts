@@ -112,6 +112,9 @@ export interface SubtaskExecutionRecord {
   subtaskRemark: string;
   createTime: string;
   updateTime: string;
+  taskId?: string;
+  agentId?: string;
+  planId?: string;
 }
 
 export interface PersonnelRecoveryRecord {
